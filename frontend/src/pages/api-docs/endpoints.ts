@@ -1470,20 +1470,33 @@ export const sections: readonly Section[] = [
 
   {
     id: 'amneziawg',
-    title: 'AmneziaWGv2',
+    title: 'AWGv2',
     description:
-      'Manage AmneziaWG interfaces through awg/awg-quick. Each local amneziawg inbound maps to one interface and config file; peers are inbound clients.',
+      'Manage AmneziaWGv2 interfaces through awg/awg-quick. New inbounds are auto-provisioned like Amnezia core; each inbound maps to one kernel interface and config file.',
     endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/awg/provision/new',
+        summary: 'Generate the next AWGv2 interface plan (name, UDP port, subnet, keys, obfuscation).',
+      },
       {
         method: 'GET',
         path: '/panel/api/awg/discovered',
         summary: 'List discovered AWG interfaces from config files and the running awg runtime.',
       },
       {
+        method: 'GET',
+        path: '/panel/api/awg/discovered/{name}/template',
+        summary: 'Build an amneziawg inbound form template from a discovered interface.',
+        params: [
+          { name: 'name', in: 'path', type: 'string', desc: 'AWG interface name, e.g. awg0.' },
+        ],
+      },
+      {
         method: 'POST',
         path: '/panel/api/awg/scan/import',
         summary: 'Import discovered interfaces into amneziawg inbounds.',
-        body: '{\n  "force": false\n}',
+        body: '{\n  "force": false,\n  "names": ["awg0"]\n}',
       },
       {
         method: 'GET',

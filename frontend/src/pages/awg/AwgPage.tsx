@@ -89,10 +89,10 @@ export default function AwgPage() {
     [discovered],
   );
 
-  async function importDiscovered(force = false, silent = false) {
+  async function importDiscovered(force = false, silent = false, names?: string[]) {
     setBusy(true);
     try {
-      const msg = await HttpUtil.post('/panel/api/awg/scan/import', { force }, { silent });
+      const msg = await HttpUtil.post('/panel/api/awg/scan/import', { force, names }, { silent });
       if (msg?.success) {
         const result = (msg.obj as { imported?: number; skipped?: number; errors?: string[] } | undefined) || {};
         const imported = Number(result.imported || 0);
@@ -282,6 +282,25 @@ export default function AwgPage() {
                         {
                           title: 'Inbound',
                           render: (_, row) => row.inboundRemark || '-',
+                        },
+                        {
+                          title: 'Actions',
+                          width: 120,
+                          render: (_, row) => (
+                            row.imported ? (
+                              <Button type="link" onClick={() => navigate(`/inbounds?highlight=${row.inboundId}`)}>
+                                Open
+                              </Button>
+                            ) : (
+                              <Button
+                                type="link"
+                                loading={busy}
+                                onClick={() => void importDiscovered(false, false, [row.name])}
+                              >
+                                Import
+                              </Button>
+                            )
+                          ),
                         },
                       ]}
                     />

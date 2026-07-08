@@ -748,6 +748,14 @@ func (s *InboundService) normalizeMtprotoXrayPort(inbound *model.Inbound, oldSet
 // then saves the inbound to the database and optionally adds it to the running Xray instance.
 // Returns the created inbound, whether Xray needs restart, and any error.
 func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, bool, error) {
+	return s.addInbound(inbound, inboundPersistOptions{})
+}
+
+type inboundPersistOptions struct {
+	skipRuntimeApply bool
+}
+
+func (s *InboundService) addInbound(inbound *model.Inbound, opts inboundPersistOptions) (*model.Inbound, bool, error) {
 	// Normalize streamSettings based on protocol
 	s.normalizeStreamSettings(inbound)
 	s.normalizeMtprotoSecret(inbound)
@@ -921,8 +929,10 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	needRestart := false
 	if inbound.Enable {
 		if inbound.NodeID == nil && inbound.Protocol == model.AmneziaWG {
-			if err := (&AwgInboundService{}).Apply(inbound); err != nil {
-				return inbound, false, err
+			if !opts.skipRuntimeApply {
+				if err := (&AwgInboundService{}).Apply(inbound); err != nil {
+					return inbound, false, err
+				}
 			}
 			return inbound, false, nil
 		}

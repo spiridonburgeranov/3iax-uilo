@@ -49,6 +49,10 @@ type ParsedInterface struct {
 	Running           bool
 }
 
+func ConfigPathForInterface(name string) string {
+	return filepath.Join(ConfigDir(), strings.TrimSpace(name)+".conf")
+}
+
 func ConfigDir() string {
 	if dir := strings.TrimSpace(os.Getenv("XUI_AWG_CONFIG_DIR")); dir != "" {
 		return dir

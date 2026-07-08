@@ -21,7 +21,9 @@ func NewAwgController(g *gin.RouterGroup) *AwgController {
 }
 
 func (a *AwgController) initRouter(g *gin.RouterGroup) {
+	g.GET("/provision/new", a.provisionNew)
 	g.GET("/discovered", a.listDiscovered)
+	g.GET("/discovered/:name/template", a.discoveredTemplate)
 	g.POST("/scan/import", a.importDiscovered)
 	g.GET("/inbounds", a.listInbounds)
 	g.POST("/restore", a.restore)
@@ -31,17 +33,28 @@ func (a *AwgController) initRouter(g *gin.RouterGroup) {
 	g.GET("/client/:inboundId/:email/config", a.clientConfig)
 }
 
+func (a *AwgController) provisionNew(c *gin.Context) {
+	result, err := a.awgInboundService.ProvisionNew()
+	jsonObj(c, result, err)
+}
+
 func (a *AwgController) listDiscovered(c *gin.Context) {
 	items, err := a.awgInboundService.ListDiscovered()
 	jsonObj(c, items, err)
 }
 
+func (a *AwgController) discoveredTemplate(c *gin.Context) {
+	template, err := a.awgInboundService.TemplateFromInterface(c.Param("name"))
+	jsonObj(c, template, err)
+}
+
 func (a *AwgController) importDiscovered(c *gin.Context) {
 	var body struct {
-		Force bool `json:"force"`
+		Force bool     `json:"force"`
+		Names []string `json:"names"`
 	}
 	_ = c.ShouldBindJSON(&body)
-	result, err := a.awgInboundService.ImportDiscovered(body.Force)
+	result, err := a.awgInboundService.ImportDiscovered(body.Force, body.Names)
 	jsonObj(c, result, err)
 }
 

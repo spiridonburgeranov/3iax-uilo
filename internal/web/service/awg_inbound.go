@@ -87,6 +87,9 @@ func (s *AwgInboundService) RestoreAll() {
 		return
 	}
 	for i := range inbounds {
+		if awg.IsInboundUp(&inbounds[i]) {
+			continue
+		}
 		if err := s.Apply(&inbounds[i]); err != nil {
 			logger.Warning("awg restore inbound", inbounds[i].Tag, "failed:", err)
 		}
@@ -97,7 +100,7 @@ func (s *AwgInboundService) StartupScanAndImport() {
 	if !awg.IsInstalled() {
 		return
 	}
-	result, scanErr := s.ImportDiscovered(false)
+	result, scanErr := s.ImportDiscovered(false, nil)
 	if scanErr != nil {
 		logger.Warning("awg startup scan failed:", scanErr)
 	}
@@ -108,6 +111,146 @@ func (s *AwgInboundService) StartupScanAndImport() {
 		logger.Warning("awg startup import:", entry)
 	}
 	s.RestoreAll()
+}
+
+type AwgProvisionResult struct {
+	Remark        string         `json:"remark"`
+	Port          int            `json:"port"`
+	Enable        bool           `json:"enable"`
+	Tag           string         `json:"tag"`
+	PublicKey     string         `json:"publicKey"`
+	InterfaceName string         `json:"interfaceName"`
+	ConfigPath    string         `json:"configPath"`
+	Settings      map[string]any `json:"settings"`
+}
+
+func (s *AwgInboundService) ProvisionNew() (*AwgProvisionResult, error) {
+	if !awg.IsInstalled() {
+		return nil, fmt.Errorf("amneziawg runtime is not installed (missing awg/awg-quick)")
+	}
+	snapshot := s.buildResourceSnapshot()
+	plan, err := awg.BuildProvisionPlan(snapshot)
+	if err != nil {
+		return nil, err
+	}
+	settings := map[string]any{
+		"secretKey":    plan.PrivateKey,
+		"address":      plan.ServerAddress,
+		"dns":          plan.DNS,
+		"awgInterface": plan.InterfaceName,
+		"mtu":          plan.MTU,
+		"jc":           plan.Jc,
+		"jmin":         plan.Jmin,
+		"jmax":         plan.Jmax,
+		"s1":           plan.S1,
+		"s2":           plan.S2,
+		"s3":           plan.S3,
+		"s4":           plan.S4,
+		"h1":           plan.H1,
+		"h2":           plan.H2,
+		"h3":           plan.H3,
+		"h4":           plan.H4,
+		"i1":           "",
+		"i2":           "",
+		"i3":           "",
+		"i4":           "",
+		"i5":           "",
+		"postUp":       "",
+		"postDown":     "",
+		"clients":      []any{},
+		"peers":        []any{},
+	}
+	return &AwgProvisionResult{
+		Remark:        "AmneziaWG " + plan.InterfaceName,
+		Port:          plan.ListenPort,
+		Enable:        true,
+		Tag:           "inbound-" + plan.InterfaceName,
+		PublicKey:     plan.PublicKey,
+		InterfaceName: plan.InterfaceName,
+		ConfigPath:    awg.ConfigPathForInterface(plan.InterfaceName),
+		Settings:      settings,
+	}, nil
+}
+
+func (s *AwgInboundService) buildResourceSnapshot() awg.ResourceSnapshot {
+	names := make([]string, 0, 16)
+	ports := make([]int, 0, 16)
+	subnets := make([]string, 0, 16)
+	if discovered, err := awg.DiscoverInterfaces(); err == nil {
+		for _, entry := range discovered {
+			names = append(names, entry.Name)
+			if entry.ListenPort > 0 {
+				ports = append(ports, entry.ListenPort)
+			}
+			if port := awg.ParseInterfacePort(entry.Name); port > 0 {
+				ports = append(ports, port)
+			}
+			if strings.TrimSpace(entry.Address) != "" {
+				subnets = append(subnets, entry.Address)
+			}
+		}
+	}
+	db := database.GetDB()
+	var inbounds []model.Inbound
+	if err := db.Where("protocol = ? AND node_id IS NULL", model.AmneziaWG).Find(&inbounds).Error; err == nil {
+		for _, inbound := range inbounds {
+			iface := awg.InterfaceName(&inbound)
+			names = append(names, iface)
+			if inbound.Port > 0 {
+				ports = append(ports, inbound.Port)
+			}
+			if port := awg.ParseInterfacePort(iface); port > 0 {
+				ports = append(ports, port)
+			}
+			var settings map[string]any
+			if err := json.Unmarshal([]byte(inbound.Settings), &settings); err == nil {
+				if address, ok := settings["address"].(string); ok && strings.TrimSpace(address) != "" {
+					subnets = append(subnets, address)
+				}
+			}
+		}
+	}
+	return awg.SnapshotFromNamesPortsSubnets(names, ports, subnets)
+}
+
+type AwgInboundTemplate struct {
+	Remark   string         `json:"remark"`
+	Port     int            `json:"port"`
+	Enable   bool           `json:"enable"`
+	Tag      string         `json:"tag"`
+	Settings map[string]any `json:"settings"`
+}
+
+func (s *AwgInboundService) TemplateFromInterface(name string) (*AwgInboundTemplate, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, fmt.Errorf("interface name is required")
+	}
+	discovered, err := awg.DiscoverInterfaces()
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range discovered {
+		if entry.Name != name {
+			continue
+		}
+		inbound, ierr := s.buildInboundFromParsed(entry)
+		if ierr != nil {
+			return nil, ierr
+		}
+		var settings map[string]any
+		if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
+			return nil, err
+		}
+		return &AwgInboundTemplate{
+			Remark:   inbound.Remark,
+			Port:     inbound.Port,
+			Enable:   inbound.Enable,
+			Tag:      inbound.Tag,
+			Settings: settings,
+		}, nil
+	}
+	return nil, fmt.Errorf("interface %s not found", name)
 }
 
 func (s *AwgInboundService) ListDiscovered() ([]AwgDiscoveredInterface, error) {
@@ -137,15 +280,27 @@ func (s *AwgInboundService) ListDiscovered() ([]AwgDiscoveredInterface, error) {
 	return out, nil
 }
 
-func (s *AwgInboundService) ImportDiscovered(force bool) (AwgImportResult, error) {
+func (s *AwgInboundService) ImportDiscovered(force bool, names []string) (AwgImportResult, error) {
 	result := AwgImportResult{}
 	discovered, err := awg.DiscoverInterfaces()
 	if err != nil {
 		return result, err
 	}
+	only := map[string]struct{}{}
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			only[name] = struct{}{}
+		}
+	}
 	known := s.knownInterfaceMap()
 	inboundSvc := InboundService{}
 	for _, entry := range discovered {
+		if len(only) > 0 {
+			if _, ok := only[entry.Name]; !ok {
+				continue
+			}
+		}
 		if _, ok := known[entry.Name]; ok {
 			result.Skipped++
 			continue
@@ -159,7 +314,7 @@ func (s *AwgInboundService) ImportDiscovered(force bool) (AwgImportResult, error
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", entry.Name, ierr))
 			continue
 		}
-		if _, _, ierr = inboundSvc.AddInbound(inbound); ierr != nil {
+		if _, _, ierr = inboundSvc.addInbound(inbound, inboundPersistOptions{skipRuntimeApply: true}); ierr != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", entry.Name, ierr))
 			continue
 		}
@@ -323,14 +478,12 @@ func (s *AwgInboundService) buildInboundFromParsed(entry awg.ParsedInterface) (*
 	}
 	clients := make([]model.Client, 0, len(entry.Peers))
 	now := time.Now().UnixMilli()
+	seenEmails := map[string]struct{}{}
 	for _, peer := range entry.Peers {
 		if strings.TrimSpace(peer.PublicKey) == "" {
 			continue
 		}
-		email := strings.TrimSpace(peer.Name)
-		if email == "" {
-			email = runtimePeerLabel(peer.PublicKey)
-		}
+		email := importScopedEmail(entry.Name, peer.Name, peer.PublicKey, seenEmails)
 		clients = append(clients, model.Client{
 			ID:           uuid.NewString(),
 			Email:        email,
@@ -404,4 +557,24 @@ func firstPanelUserID() (int, error) {
 
 func wgPublicFromPrivate(privateKey string) (string, error) {
 	return wireguard.PublicKeyFromPrivate(privateKey)
+}
+
+func importScopedEmail(iface, peerName, publicKey string, seen map[string]struct{}) string {
+	base := strings.TrimSpace(peerName)
+	if base == "" {
+		base = runtimePeerLabel(publicKey)
+	}
+	candidate := base
+	if strings.TrimSpace(iface) != "" {
+		candidate = iface + "/" + base
+	}
+	key := strings.ToLower(candidate)
+	for {
+		if _, ok := seen[key]; !ok {
+			seen[key] = struct{}{}
+			return candidate
+		}
+		candidate = candidate + "-2"
+		key = strings.ToLower(candidate)
+	}
 }

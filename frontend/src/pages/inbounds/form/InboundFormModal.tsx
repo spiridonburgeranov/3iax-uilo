@@ -98,7 +98,7 @@ const labelWithHint = (label: string, hint: string) => (
 
 const PROTOCOL_OPTIONS = Object.values(Protocols).map((p) => ({
   value: p,
-  label: p === Protocols.AMNEZIAWG ? 'amneziawg-v2' : p,
+  label: p === Protocols.AMNEZIAWG ? 'AWGv2' : p,
 }));
 const TRAFFIC_RESETS = ['never', 'hourly', 'daily', 'weekly', 'monthly'] as const;
 const SHARE_ADDR_STRATEGIES = ['node', 'listen', 'custom'] as const;
@@ -686,7 +686,7 @@ export default function InboundFormModal({
   const protocolTab = (
     <>
       {protocol === Protocols.WIREGUARD && <WireguardFields wgPubKey={wgPubKey} regenInboundWg={regenInboundWg} />}
-      {protocol === Protocols.AMNEZIAWG && <AmneziawgFields wgPubKey={wgPubKey} regenInboundWg={regenInboundWg} />}
+      {protocol === Protocols.AMNEZIAWG && <AmneziawgFields wgPubKey={wgPubKey} regenInboundWg={regenInboundWg} mode={mode} />}
 
       {protocol === Protocols.TUN && <TunFields />}
 
