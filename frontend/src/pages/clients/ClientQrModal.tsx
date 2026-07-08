@@ -46,6 +46,7 @@ export default function ClientQrModal({
   const { t } = useTranslation();
   const [links, setLinks] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [awgConfigs, setAwgConfigs] = useState<Record<number, string>>({});
 
   const subLink = useMemo(() => {
     if (!client?.subId || !subSettings?.enable || !subSettings?.subURI) return '';
@@ -63,11 +64,38 @@ export default function ClientQrModal({
     return findTunnelInbounds(client, inboundsById).map((inbound) => ({
       id: inbound.id,
       label: clientTunnelConfigLabel(inbound),
-      text: buildClientTunnelConfig(client, inbound, window.location.hostname, subSettings?.publicHost ?? ''),
+      text: inbound.protocol === 'amneziawg'
+        ? awgConfigs[inbound.id] || ''
+        : buildClientTunnelConfig(client, inbound, window.location.hostname, subSettings?.publicHost ?? ''),
     })).filter((item) => item.text.length > 0);
-  }, [client, inboundsById, subSettings?.publicHost]);
+  }, [awgConfigs, client, inboundsById, subSettings?.publicHost]);
 
   const hasAnything = !!subLink || !!subJsonLink || tunnelConfigs.length > 0 || links.length > 0;
+
+  useEffect(() => {
+    const awgClientId = client?.uuid || (client?.id ? String(client.id) : '');
+    if (!open || !awgClientId) {
+      setAwgConfigs({});
+      return;
+    }
+    const awgInbounds = findTunnelInbounds(client, inboundsById).filter((inbound) => inbound.protocol === 'amneziawg');
+    if (awgInbounds.length === 0) {
+      setAwgConfigs({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const next: Record<number, string> = {};
+      for (const inbound of awgInbounds) {
+        const msg = await HttpUtil.get(`/panel/api/awg/client/uuid/${encodeURIComponent(awgClientId)}/config`, undefined, { silent: true }) as ApiMsg<string>;
+        if (msg?.success && typeof msg.obj === 'string') {
+          next[inbound.id] = msg.obj;
+        }
+      }
+      if (!cancelled) setAwgConfigs(next);
+    })();
+    return () => { cancelled = true; };
+  }, [client, inboundsById, open]);
 
   useEffect(() => {
     if (!open || !client?.subId) {

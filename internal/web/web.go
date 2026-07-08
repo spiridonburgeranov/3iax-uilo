@@ -288,6 +288,7 @@ const (
 	cadenceXrayRestart   = "@every 30s"
 	cadenceXrayTraffic   = "@every 5s"
 	cadenceMtproto       = "@every 10s"
+	cadenceAwgTraffic    = "@every 10s"
 	cadenceClientIPScan  = "@every 10s"
 	cadenceNodeHeartbeat = "@every 5s"
 	cadenceNodeTraffic   = "@every 5s"
@@ -331,6 +332,10 @@ func (s *Server) startTask(restartXray bool) {
 	mtJob := job.NewMtprotoJob()
 	_, _ = s.cron.AddJob(cadenceMtproto, mtJob)
 	go mtJob.Run()
+
+	awgJob := job.NewAwgTrafficJob()
+	_, _ = s.cron.AddJob(cadenceAwgTraffic, awgJob)
+	go awgJob.Run()
 
 	// check client ips from log file every 10 sec
 	_, _ = s.cron.AddJob(cadenceClientIPScan, job.NewCheckClientIpJob())
@@ -655,6 +660,8 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 			s.bus.Subscribe("tg-notifier", s.tgbotService.HandleEvent)
 		}
 	})
+
+	(&service.AwgService{}).StartIfEnabled()
 
 	s.startTask(restartXray)
 

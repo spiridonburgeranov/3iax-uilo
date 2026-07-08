@@ -128,24 +128,11 @@ export default function IndexPage() {
     await refresh();
   }, [refresh]);
 
-  const findAwgInbound = useCallback(async () => {
-    const msg = await HttpUtil.get('/panel/api/inbounds/list', undefined, { silent: true });
-    const list = Array.isArray(msg?.obj) ? msg.obj as { id?: number; protocol?: string }[] : [];
-    const inbound = list.find((row) => row.protocol === 'amneziawg' && typeof row.id === 'number');
-    if (!inbound?.id) {
-      messageApi.error('AmneziaWG inbound not found');
-      return 0;
-    }
-    return inbound.id;
-  }, [messageApi]);
-
   const setAwgEnabled = useCallback(async (enable: boolean) => {
-    const id = await findAwgInbound();
-    if (!id) return false;
-    const msg = await HttpUtil.post(`/panel/api/inbounds/setEnable/${id}`, { enable });
+    const msg = await HttpUtil.post('/panel/api/awg/server/toggle', { enable });
     await refresh();
     return !!msg?.success;
-  }, [findAwgInbound, refresh]);
+  }, [refresh]);
 
   const startAwg = useCallback(async () => {
     setBusy({ busy: true, tip: 'Starting AmneziaWG...' });

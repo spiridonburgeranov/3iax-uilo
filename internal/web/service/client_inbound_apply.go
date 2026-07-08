@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -361,6 +362,19 @@ func (s *ClientService) addInboundClient(inboundSvc *InboundService, data *model
 		if dErr := defaultTunnelClients(oldInbound.Protocol, oldInbound.Settings, existingClients, clients, interfaceClients); dErr != nil {
 			return false, dErr
 		}
+		if oldInbound.Protocol == model.AmneziaWG {
+			for i := range clients {
+				if strings.TrimSpace(clients[i].ID) == "" {
+					clients[i].ID = uuid.NewString()
+					if i < len(interfaceClients) {
+						if m, ok := interfaceClients[i].(map[string]any); ok {
+							m["id"] = clients[i].ID
+							interfaceClients[i] = m
+						}
+					}
+				}
+			}
+		}
 	}
 
 	for _, client := range clients {
@@ -460,6 +474,15 @@ func (s *ClientService) addInboundClient(inboundSvc *InboundService, data *model
 
 	// Apply to the running runtime after commit — outside the serialized writer
 	// so a slow node call can't stall traffic accounting.
+	if oldInbound.Protocol == model.AmneziaWG && oldInbound.NodeID == nil {
+		for i := range clients {
+			if err := syncAwgClientFromInboundClient(&clients[i]); err != nil {
+				return true, err
+			}
+		}
+		return false, nil
+	}
+
 	if oldInbound.NodeID == nil {
 		if !push {
 			needRestart = true
@@ -601,6 +624,9 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	// settings JSON and the running peer keep the client's identity.
 	if (oldInbound.Protocol == model.WireGuard || oldInbound.Protocol == model.AmneziaWG) && clientIndex >= 0 && clientIndex < len(oldClients) {
 		old := oldClients[clientIndex]
+		if oldInbound.Protocol == model.AmneziaWG && strings.TrimSpace(clients[0].ID) == "" {
+			clients[0].ID = old.ID
+		}
 		if clients[0].PrivateKey == "" {
 			clients[0].PrivateKey = old.PrivateKey
 		}
@@ -738,6 +764,13 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	// the transaction back). nodePushPlan only reads, so order doesn't matter.
 	var rt runtime.Runtime
 	var push bool
+	if oldInbound.Protocol == model.AmneziaWG && oldInbound.NodeID == nil {
+		if err := syncAwgClientFromInboundClient(&clients[0]); err != nil {
+			return true, err
+		}
+		return false, nil
+	}
+
 	if len(oldEmail) > 0 {
 		var perr error
 		rt, push, _, perr = inboundSvc.nodePushPlan(oldInbound)
@@ -903,6 +936,7 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 	var newClients []any
 	needApiDel := false
 	found := false
+	awgClientUUID := ""
 
 	for _, client := range interfaceClients {
 		c, ok := client.(map[string]any)
@@ -912,6 +946,9 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 		if cEmail, ok := c["email"].(string); ok && cEmail == email {
 			found = true
 			needApiDel, _ = c["enable"].(bool)
+			if id, ok := c["id"].(string); ok {
+				awgClientUUID = strings.TrimSpace(id)
+			}
 		} else {
 			newClients = append(newClients, client)
 		}
@@ -1003,6 +1040,14 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 	// Xray users are keyed by inbound tag, so the user must be removed from this
 	// inbound's runtime even when the same email survives in another inbound.
 	if len(email) > 0 {
+		if oldInbound.Protocol == model.AmneziaWG && oldInbound.NodeID == nil {
+			if awgClientUUID != "" {
+				if err := (&AwgService{}).DeleteClientByUUID(awgClientUUID); err != nil {
+					return true, err
+				}
+			}
+			return false, nil
+		}
 		if oldInbound.NodeID == nil {
 			if oldInbound.Protocol == model.MTProto {
 				// mtg serves the full secret set, so any client delete re-applies

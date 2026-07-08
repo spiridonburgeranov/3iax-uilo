@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/awg"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -887,7 +886,7 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	needRestart := false
 	if inbound.Enable {
 		if inbound.NodeID == nil && inbound.Protocol == model.AmneziaWG {
-			if err := awg.ApplyInbound(inbound); err != nil {
+			if err := (&AwgService{}).ToggleServer(true); err != nil {
 				return inbound, false, err
 			}
 			return inbound, false, err
@@ -945,8 +944,7 @@ func (s *InboundService) DelInbound(id int) (bool, error) {
 	loadErr := db.Model(model.Inbound{}).Where("id = ?", id).First(&ib).Error
 	if loadErr == nil {
 		if ib.NodeID == nil && ib.Protocol == model.AmneziaWG {
-			_ = awg.DisableInbound(&ib)
-			_ = awg.RemoveConfig(&ib)
+			_ = (&AwgService{}).ToggleServer(false)
 		}
 		shouldPushToRuntime := ib.NodeID != nil || ib.Enable
 		if shouldPushToRuntime {
@@ -1101,12 +1099,8 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 	}
 	inbound.Enable = enable
 	if inbound.NodeID == nil && inbound.Protocol == model.AmneziaWG {
-		if enable {
-			if err := awg.ApplyInbound(inbound); err != nil {
-				return false, err
-			}
-		} else {
-			_ = awg.DisableInbound(inbound)
+		if err := (&AwgService{}).ToggleServer(enable); err != nil {
+			return false, err
 		}
 		return false, nil
 	}
@@ -1425,11 +1419,10 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		return inbound, false, txErr
 	}
 	if disableAWGAfterCommit {
-		_ = awg.DisableInbound(oldInbound)
-		_ = awg.RemoveConfig(oldInbound)
+		_ = (&AwgService{}).ToggleServer(false)
 	}
 	if applyAWGAfterCommit {
-		if err := awg.ApplyInbound(oldInbound); err != nil {
+		if err := (&AwgService{}).ToggleServer(true); err != nil {
 			return inbound, false, err
 		}
 	}

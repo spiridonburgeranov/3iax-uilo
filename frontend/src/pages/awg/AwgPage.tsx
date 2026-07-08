@@ -5,22 +5,21 @@ import { PoweroffOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icon
 import AppSidebar from '@/layouts/AppSidebar';
 import { useTheme } from '@/hooks/useTheme';
 import { useStatusQuery } from '@/api/queries/useStatusQuery';
-import { HttpUtil, RandomUtil, SizeFormatter, Wireguard } from '@/utils';
-import { createDefaultAmneziawgInboundSettings } from '@/lib/xray/inbound-defaults';
-import { coerceInboundJsonField, type DBInboundInit } from '@/models/dbinbound';
+import { HttpUtil, SizeFormatter, Wireguard } from '@/utils';
 import type { AwgPeer } from '@/models/status';
 import '@/pages/index/IndexPage.css';
 
 interface AwgFormValues {
   id: number;
   enable: boolean;
-  remark: string;
-  listen: string;
-  port: number;
-  address: string;
+  interfaceName: string;
+  listenPort: number;
+  ipv4Address: string;
+  ipv4Pool: string;
   externalInterface: string;
-  secretKey: string;
+  privateKey: string;
   publicKey: string;
+  endpoint: string;
   dns: string;
   mtu: number;
   jc: number;
@@ -34,18 +33,20 @@ interface AwgFormValues {
   h4: number;
   postUp: string;
   postDown: string;
+  trafficReset: string;
 }
 
 const defaultForm: AwgFormValues = {
   id: 0,
   enable: false,
-  remark: 'AmneziaWG',
-  listen: '',
-  port: 51820,
-  address: '10.66.66.1/24',
+  interfaceName: 'awg0',
+  listenPort: 51820,
+  ipv4Address: '10.66.66.1/24',
+  ipv4Pool: '10.66.66.0/24',
   externalInterface: '',
-  secretKey: '',
+  privateKey: '',
   publicKey: '',
+  endpoint: '',
   dns: '1.1.1.1,2606:4700:4700::1111',
   mtu: 1420,
   jc: 4,
@@ -59,75 +60,29 @@ const defaultForm: AwgFormValues = {
   h4: 4,
   postUp: '',
   postDown: '',
+  trafficReset: 'never',
 };
 
-function formFromInbound(inbound: DBInboundInit | null): AwgFormValues {
-  if (!inbound) {
+function formFromServer(server: Partial<AwgFormValues> | null): AwgFormValues {
+  if (!server) {
     const kp = Wireguard.generateKeypair();
-    return { ...defaultForm, secretKey: kp.privateKey, publicKey: kp.publicKey };
+    return { ...defaultForm, privateKey: kp.privateKey, publicKey: kp.publicKey };
   }
-  const settings = coerceInboundJsonField(inbound.settings);
-  const secretKey = String(settings.secretKey || '');
+  const privateKey = String(server.privateKey || '');
   return {
     ...defaultForm,
-    id: inbound.id || 0,
-    enable: inbound.enable !== false,
-    remark: inbound.remark || defaultForm.remark,
-    listen: inbound.listen || '',
-    port: Number(inbound.port || defaultForm.port),
-    address: String(settings.address || defaultForm.address),
-    externalInterface: String(settings.externalInterface || ''),
-    secretKey,
-    publicKey: secretKey ? Wireguard.generateKeypair(secretKey).publicKey : '',
-    dns: String(settings.dns || defaultForm.dns),
-    mtu: Number(settings.mtu || defaultForm.mtu),
-    jc: Number(settings.jc ?? defaultForm.jc),
-    jmin: Number(settings.jmin ?? defaultForm.jmin),
-    jmax: Number(settings.jmax ?? defaultForm.jmax),
-    s1: Number(settings.s1 ?? defaultForm.s1),
-    s2: Number(settings.s2 ?? defaultForm.s2),
-    h1: Number(settings.h1 ?? defaultForm.h1),
-    h2: Number(settings.h2 ?? defaultForm.h2),
-    h3: Number(settings.h3 ?? defaultForm.h3),
-    h4: Number(settings.h4 ?? defaultForm.h4),
-    postUp: String(settings.postUp || ''),
-    postDown: String(settings.postDown || ''),
+    ...server,
+    id: Number(server.id || 0),
+    enable: server.enable === true,
+    listenPort: Number(server.listenPort || defaultForm.listenPort),
+    mtu: Number(server.mtu || defaultForm.mtu),
+    privateKey,
+    publicKey: privateKey ? Wireguard.generateKeypair(privateKey).publicKey : String(server.publicKey || ''),
   };
 }
 
 function payloadFromForm(values: AwgFormValues) {
-  const settings = {
-    ...createDefaultAmneziawgInboundSettings({ secretKey: values.secretKey, mtu: values.mtu }),
-    address: values.address,
-    externalInterface: values.externalInterface,
-    dns: values.dns,
-    jc: values.jc,
-    jmin: values.jmin,
-    jmax: values.jmax,
-    s1: values.s1,
-    s2: values.s2,
-    h1: values.h1,
-    h2: values.h2,
-    h3: values.h3,
-    h4: values.h4,
-    postUp: values.postUp,
-    postDown: values.postDown,
-  };
-  return {
-    up: 0,
-    down: 0,
-    total: 0,
-    remark: values.remark || defaultForm.remark,
-    enable: values.enable,
-    expiryTime: 0,
-    listen: values.listen || '',
-    port: values.port,
-    protocol: 'amneziawg',
-    settings: JSON.stringify(settings, null, 2),
-    streamSettings: JSON.stringify({ network: 'udp', security: 'none' }),
-    sniffing: JSON.stringify({ enabled: false, destOverride: [] }),
-    tag: values.id ? undefined : `inbound-amneziawg-${RandomUtil.randomLowerAndNum(6)}`,
-  };
+  return values;
 }
 
 function formatHandshake(peer: AwgPeer) {
@@ -142,7 +97,6 @@ export default function AwgPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [runtimeBusy, setRuntimeBusy] = useState(false);
-  const [inbound, setInbound] = useState<DBInboundInit | null>(null);
   const [messageApi, messageContextHolder] = message.useMessage();
 
   const pageClass = `index-page ${isDark ? 'is-dark' : ''} ${isUltra ? 'is-ultra' : ''}`.trim();
@@ -150,11 +104,8 @@ export default function AwgPage() {
   async function load() {
     setLoading(true);
     try {
-      const msg = await HttpUtil.get('/panel/api/inbounds/list', undefined, { silent: true });
-      const list = Array.isArray(msg?.obj) ? (msg.obj as DBInboundInit[]) : [];
-      const found = list.find((row) => row.protocol === 'amneziawg') || null;
-      setInbound(found);
-      form.setFieldsValue(formFromInbound(found));
+      const msg = await HttpUtil.get('/panel/api/awg/server', undefined, { silent: true });
+      form.setFieldsValue(formFromServer((msg?.obj || null) as Partial<AwgFormValues> | null));
       await refreshStatus();
     } finally {
       setLoading(false);
@@ -184,8 +135,7 @@ export default function AwgPage() {
     setSaving(true);
     try {
       const payload = payloadFromForm(values);
-      const url = values.id ? `/panel/api/inbounds/update/${values.id}` : '/panel/api/inbounds/add';
-      const msg = await HttpUtil.post(url, payload);
+      const msg = await HttpUtil.post('/panel/api/awg/server', payload);
       if (msg?.success) {
         messageApi.success('Saved');
         await load();
@@ -197,19 +147,13 @@ export default function AwgPage() {
 
   function regenerateServerKey() {
     const kp = Wireguard.generateKeypair();
-    form.setFieldsValue({ secretKey: kp.privateKey, publicKey: kp.publicKey });
+    form.setFieldsValue({ privateKey: kp.privateKey, publicKey: kp.publicKey });
   }
 
   async function setAwgEnabled(enable: boolean) {
-    const values = form.getFieldsValue();
-    const id = values.id || inbound?.id;
-    if (!id) {
-      messageApi.warning('Save AmneziaWG inbound first');
-      return;
-    }
     setRuntimeBusy(true);
     try {
-      const msg = await HttpUtil.post(`/panel/api/inbounds/setEnable/${id}`, { enable });
+      const msg = await HttpUtil.post('/panel/api/awg/server/toggle', { enable });
       if (msg?.success) {
         messageApi.success(enable ? 'AmneziaWG started' : 'AmneziaWG stopped');
         await load();
@@ -220,16 +164,10 @@ export default function AwgPage() {
   }
 
   async function restartAwg() {
-    const values = form.getFieldsValue();
-    const id = values.id || inbound?.id;
-    if (!id) {
-      messageApi.warning('Save AmneziaWG inbound first');
-      return;
-    }
     setRuntimeBusy(true);
     try {
-      await HttpUtil.post(`/panel/api/inbounds/setEnable/${id}`, { enable: false }, { silent: true });
-      const msg = await HttpUtil.post(`/panel/api/inbounds/setEnable/${id}`, { enable: true });
+      await HttpUtil.post('/panel/api/awg/server/toggle', { enable: false }, { silent: true });
+      const msg = await HttpUtil.post('/panel/api/awg/server/toggle', { enable: true });
       if (msg?.success) {
         messageApi.success('AmneziaWG restarted');
         await load();
@@ -297,7 +235,7 @@ export default function AwgPage() {
                 <Col span={24}>
                   <Card
                     title="AmneziaWG settings"
-                    extra={inbound?.id ? <Tag>inbound #{inbound.id}</Tag> : null}
+                    extra={<Tag>AmneziaWGv2</Tag>}
                     actions={[
                       <Space className="action" key="reload" role="button" tabIndex={0} onClick={load}>
                         <ReloadOutlined />
@@ -318,23 +256,23 @@ export default function AwgPage() {
                           </Form.Item>
                         </Col>
                         <Col xs={24} md={8}>
-                          <Form.Item name="remark" label="Name" rules={[{ required: true }]}>
+                          <Form.Item name="interfaceName" label="Interface" rules={[{ required: true }]}>
                             <Input />
                           </Form.Item>
                         </Col>
                         <Col xs={24} md={8}>
-                          <Form.Item name="port" label="Listen port" rules={[{ required: true }]}>
+                          <Form.Item name="listenPort" label="Listen port" rules={[{ required: true }]}>
                             <InputNumber min={1} max={65535} style={{ width: '100%' }} />
                           </Form.Item>
                         </Col>
                         <Col xs={24} md={8}>
-                          <Form.Item name="listen" label="Listen IP">
-                            <Input placeholder="0.0.0.0" />
+                          <Form.Item name="ipv4Address" label="Server IPv4" rules={[{ required: true }]}>
+                            <Input placeholder="10.66.66.1/24" />
                           </Form.Item>
                         </Col>
                         <Col xs={24} md={8}>
-                          <Form.Item name="address" label="Server address" rules={[{ required: true }]}>
-                            <Input placeholder="10.66.66.1/24" />
+                          <Form.Item name="ipv4Pool" label="IPv4 pool" rules={[{ required: true }]}>
+                            <Input placeholder="10.66.66.0/24" />
                           </Form.Item>
                         </Col>
                         <Col xs={24} md={8}>
@@ -342,15 +280,20 @@ export default function AwgPage() {
                             <Input placeholder="eth0" />
                           </Form.Item>
                         </Col>
+                        <Col xs={24} md={8}>
+                          <Form.Item name="endpoint" label="Endpoint">
+                            <Input placeholder="example.com:51820" />
+                          </Form.Item>
+                        </Col>
                         <Col xs={24}>
                           <Form.Item label="Server private key" required>
                             <Space.Compact style={{ display: 'flex' }}>
-                              <Form.Item name="secretKey" noStyle rules={[{ required: true }]}>
+                              <Form.Item name="privateKey" noStyle rules={[{ required: true }]}>
                                 <Input
                                   style={{ flex: 1 }}
                                   onChange={(event) => {
-                                    const secretKey = event.target.value;
-                                    form.setFieldValue('publicKey', secretKey ? Wireguard.generateKeypair(secretKey).publicKey : '');
+                                    const privateKey = event.target.value;
+                                    form.setFieldValue('publicKey', privateKey ? Wireguard.generateKeypair(privateKey).publicKey : '');
                                   }}
                                 />
                               </Form.Item>

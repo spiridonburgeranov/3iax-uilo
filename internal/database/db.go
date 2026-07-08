@@ -81,6 +81,8 @@ func initModels() error {
 		&model.NodeClientIp{},
 		&model.ClientGlobalTraffic{},
 		&model.OutboundSubscription{},
+		&model.AwgServer{},
+		&model.AwgClient{},
 	}
 	for _, mdl := range models {
 		if IsPostgres() && postgresModelSettled(mdl) {

@@ -636,26 +636,22 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 			peerByKey[peer.PublicKey] = len(status.Awg.Peers)
 			status.Awg.Peers = append(status.Awg.Peers, peer)
 		}
-		var inbounds []*model.Inbound
-		if err := database.GetDB().Where("protocol = ? AND enable = ? AND node_id IS NULL", model.AmneziaWG, true).Find(&inbounds).Error; err == nil {
-			for _, inbound := range inbounds {
-				if awg.IsInboundUp(inbound) {
-					status.Awg.Running = true
-					peers, peerErr := awg.RuntimePeers(inbound)
-					if peerErr != nil {
-						status.Awg.Error = peerErr.Error()
-						continue
-					}
-					for _, peer := range peers {
-						if idx, ok := peerByKey[peer.PublicKey]; ok {
-							status.Awg.Peers[idx].InboundID = peer.InboundID
-							status.Awg.Peers[idx].InboundRemark = peer.InboundRemark
-							status.Awg.Peers[idx].Email = peer.Email
-						} else {
-							peerByKey[peer.PublicKey] = len(status.Awg.Peers)
-							status.Awg.Peers = append(status.Awg.Peers, peer)
-						}
-					}
+		var awgClients []model.AwgClient
+		if err := database.GetDB().Find(&awgClients).Error; err == nil {
+			for _, client := range awgClients {
+				if idx, ok := peerByKey[client.PublicKey]; ok {
+					status.Awg.Peers[idx].Email = client.Email
+				} else {
+					peerByKey[client.PublicKey] = len(status.Awg.Peers)
+					status.Awg.Peers = append(status.Awg.Peers, awg.PeerRuntime{
+						Email:           client.Email,
+						PublicKey:       client.PublicKey,
+						AllowedIPs:      splitCommaList(client.AllowedIPs),
+						LatestHandshake: client.LastOnline / 1000,
+						TransferRx:      uint64(client.Download),
+						TransferTx:      uint64(client.Upload),
+						Online:          client.LastOnline > 0 && time.Since(time.UnixMilli(client.LastOnline)) <= 3*time.Minute,
+					})
 				}
 			}
 		}
@@ -690,6 +686,17 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	}
 
 	return status
+}
+
+func splitCommaList(value string) []string {
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if item := strings.TrimSpace(part); item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 // AppendCpuSample is preserved for callers that only have the CPU number.

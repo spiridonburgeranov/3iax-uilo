@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/awg"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -1044,29 +1043,12 @@ func (s *InboundService) GetOnlineClientsByGuid() map[string][]string {
 }
 
 func (s *InboundService) getAwgOnlineClients() []string {
-	if !awg.IsInstalled() {
+	threshold := time.Now().Add(-3 * time.Minute).UnixMilli()
+	var emails []string
+	if err := database.GetDB().Model(&model.AwgClient{}).Where("enable = ? AND last_online > ?", true, threshold).Pluck("email", &emails).Error; err != nil {
 		return nil
 	}
-	var inbounds []*model.Inbound
-	if err := database.GetDB().Where("protocol = ? AND enable = ? AND node_id IS NULL", model.AmneziaWG, true).Find(&inbounds).Error; err != nil {
-		return nil
-	}
-	out := []string{}
-	for _, inbound := range inbounds {
-		if !awg.IsInboundUp(inbound) {
-			continue
-		}
-		peers, err := awg.RuntimePeers(inbound)
-		if err != nil {
-			continue
-		}
-		for _, peer := range peers {
-			if peer.Online && peer.Email != "" {
-				out = append(out, peer.Email)
-			}
-		}
-	}
-	return out
+	return emails
 }
 
 // GetActiveInboundsByGuid returns the inbound tags that carried traffic within

@@ -179,6 +179,30 @@ func RuntimeAllPeers() ([]PeerRuntime, error) {
 	return out, nil
 }
 
+func RuntimePeersFromInterface(interfaceName string) ([]PeerRuntime, error) {
+	rows, err := dumpPeers(interfaceName)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().Unix()
+	out := make([]PeerRuntime, 0, len(rows))
+	for _, row := range rows {
+		online := row.LatestHandshake > 0 && now-row.LatestHandshake <= 180
+		out = append(out, PeerRuntime{
+			InterfaceName:   row.InterfaceName,
+			PublicKey:       row.PublicKey,
+			Endpoint:        row.Endpoint,
+			AllowedIPs:      row.AllowedIPs,
+			LatestHandshake: row.LatestHandshake,
+			TransferRx:      row.TransferRx,
+			TransferTx:      row.TransferTx,
+			KeepAlive:       row.KeepAlive,
+			Online:          online,
+		})
+	}
+	return out, nil
+}
+
 func ApplyInbound(inbound *model.Inbound) error {
 	if inbound == nil {
 		return nil
