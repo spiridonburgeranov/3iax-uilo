@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mhsanaei/3x-ui/v3/internal/awg"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -1043,12 +1044,46 @@ func (s *InboundService) GetOnlineClientsByGuid() map[string][]string {
 }
 
 func (s *InboundService) getAwgOnlineClients() []string {
-	threshold := time.Now().Add(-3 * time.Minute).UnixMilli()
-	var emails []string
-	if err := database.GetDB().Model(&model.AwgClient{}).Where("enable = ? AND last_online > ?", true, threshold).Pluck("email", &emails).Error; err != nil {
-		return nil
+	seen := map[string]struct{}{}
+	add := func(email string) {
+		email = strings.TrimSpace(email)
+		if email != "" {
+			seen[email] = struct{}{}
+		}
 	}
-	return emails
+	db := database.GetDB()
+	threshold := time.Now().Add(-3 * time.Minute).UnixMilli()
+	var legacy []string
+	if err := db.Model(&model.AwgClient{}).
+		Where("enable = ? AND last_online > ?", true, threshold).
+		Pluck("email", &legacy).Error; err == nil {
+		for _, email := range legacy {
+			add(email)
+		}
+	}
+	if awg.IsInstalled() {
+		var inbounds []model.Inbound
+		if err := db.Where("protocol = ? AND node_id IS NULL AND enable = ?", model.AmneziaWG, true).
+			Find(&inbounds).Error; err == nil {
+			for i := range inbounds {
+				peers, err := awg.RuntimePeers(&inbounds[i])
+				if err != nil {
+					continue
+				}
+				for _, peer := range peers {
+					if peer.Online {
+						add(peer.Email)
+					}
+				}
+			}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for email := range seen {
+		out = append(out, email)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // GetActiveInboundsByGuid returns the inbound tags that carried traffic within

@@ -12,11 +12,7 @@ import { isPostQuantumLink } from '@/lib/xray/inbound-link';
 import { LinkTags, linkMetaText, parseLinkParts } from '@/lib/xray/link-label';
 import { QrPanel } from '@/pages/inbounds/qr';
 import ConfigBlock from '@/components/clients/ConfigBlock';
-import {
-  buildClientTunnelConfig,
-  clientTunnelConfigLabel,
-  findTunnelInbounds,
-} from './wireguardConfig';
+import { useTunnelClientConfigs } from './useTunnelClientConfigs';
 import './ClientInfoModal.css';
 
 const INBOUND_PROTOCOL_COLORS: Record<string, string> = {
@@ -27,6 +23,7 @@ const INBOUND_PROTOCOL_COLORS: Record<string, string> = {
   hysteria: 'cyan',
   hysteria2: 'green',
   wireguard: 'gold',
+  amneziawg: 'cyan',
   http: 'purple',
   mixed: 'lime',
   tunnel: 'orange',
@@ -140,14 +137,12 @@ export default function ClientInfoModal({
   }, [client?.subId, subSettings?.subClashEnable, subSettings?.subClashURI]);
 
   const showSubscription = !!(subSettings?.enable && client?.subId);
-  const tunnelConfigs = useMemo(() => {
-    if (!client) return [];
-    return findTunnelInbounds(client, inboundsById).map((inbound) => ({
-      id: inbound.id,
-      label: clientTunnelConfigLabel(inbound),
-      text: buildClientTunnelConfig(client, inbound, window.location.hostname, subSettings?.publicHost ?? ''),
-    })).filter((item) => item.text.length > 0);
-  }, [client, inboundsById, subSettings?.publicHost]);
+  const { tunnelConfigs } = useTunnelClientConfigs(
+    open,
+    client,
+    inboundsById,
+    subSettings?.publicHost ?? '',
+  );
 
   async function copyValue(text: string) {
     if (!text) return;
@@ -513,6 +508,8 @@ export default function ClientInfoModal({
                       text={cfg.text}
                       fileName={`${client.email}-${cfg.label.toLowerCase().replace(/\s+/g, '-')}.conf`}
                       qrRemark={client.email || 'peer'}
+                      showQr={false}
+                      tagColor={cfg.protocol === 'amneziawg' ? 'cyan' : 'gold'}
                     />
                   </Fragment>
                 ))}

@@ -1,5 +1,6 @@
 import { formatInboundLabel } from '@/lib/inbounds/label';
 import { preferPublicHost, resolveShareHost } from '@/lib/xray/inbound-link';
+import { HttpUtil } from '@/utils';
 import type { ClientRecord, InboundOption } from '@/hooks/useClients';
 
 export function isWireguardClient(client: ClientRecord | null | undefined): boolean {
@@ -23,12 +24,23 @@ export function findTunnelInbounds(
     .filter((ib): ib is InboundOption => ib?.protocol === 'wireguard' || ib?.protocol === 'amneziawg');
 }
 
-function awgNum(value: number | undefined, fallback: number) {
-  return typeof value === 'number' && value >= 0 ? value : fallback;
+
+function awgOptionalNum(value: number | undefined) {
+  return typeof value === 'number' && !Number.isNaN(value) ? value : undefined;
 }
 
 function awgText(value: string | undefined) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function clientAllowedIPs(client: ClientRecord): string {
+  const value = client.allowedIPs as string | string[] | undefined;
+  if (Array.isArray(value)) {
+    const parts = value.map((v) => String(v).trim()).filter(Boolean);
+    if (parts.length) return parts.join(', ');
+  }
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  return '10.66.66.2/32';
 }
 
 export function buildWireguardClientConfig(
@@ -65,7 +77,7 @@ export function buildAmneziawgClientConfig(
   publicHost = '',
 ): string {
   const endpointHost = resolveShareHost(inbound ?? {}, inbound?.nodeAddress ?? '', preferPublicHost(host, publicHost));
-  const address = client.allowedIPs || '10.66.66.2/32';
+  const address = clientAllowedIPs(client);
   const endpoint = `${endpointHost}:${inbound?.port || ''}`;
   const inboundName = inbound ? formatInboundLabel(inbound.tag, inbound.remark) : '';
   const remark = [inboundName, client.email, client.comment].filter(Boolean).join(' - ');
@@ -76,15 +88,18 @@ export function buildAmneziawgClientConfig(
     `DNS = ${inbound?.wgDns || '1.1.1.1,2606:4700:4700::1111'}`,
   ];
   if (inbound?.wgMtu && inbound.wgMtu > 0) lines.push(`MTU = ${inbound.wgMtu}`);
-  lines.push(
-    `Jc = ${awgNum(inbound?.awgJc, 4)}`,
-    `Jmin = ${awgNum(inbound?.awgJmin, 64)}`,
-    `Jmax = ${awgNum(inbound?.awgJmax, 256)}`,
-    `S1 = ${awgNum(inbound?.awgS1, 15)}`,
-    `S2 = ${awgNum(inbound?.awgS2, 25)}`,
-    `S3 = ${awgNum(inbound?.awgS3, 35)}`,
-    `S4 = ${awgNum(inbound?.awgS4, 15)}`,
-  );
+  const obfuscation = [
+    ['Jc', awgOptionalNum(inbound?.awgJc)],
+    ['Jmin', awgOptionalNum(inbound?.awgJmin)],
+    ['Jmax', awgOptionalNum(inbound?.awgJmax)],
+    ['S1', awgOptionalNum(inbound?.awgS1)],
+    ['S2', awgOptionalNum(inbound?.awgS2)],
+    ['S3', awgOptionalNum(inbound?.awgS3)],
+    ['S4', awgOptionalNum(inbound?.awgS4)],
+  ] as const;
+  for (const [label, value] of obfuscation) {
+    if (value !== undefined) lines.push(`${label} = ${value}`);
+  }
   for (const [label, value] of [
     ['H1', inbound?.awgH1],
     ['H2', inbound?.awgH2],
@@ -107,6 +122,38 @@ export function buildAmneziawgClientConfig(
   const keepAlive = client.keepAlive && client.keepAlive > 0 ? client.keepAlive : 25;
   lines.push(`PersistentKeepalive = ${keepAlive}`);
   return lines.join('\n');
+}
+
+export async function fetchAmneziawgClientConfig(
+  client: ClientRecord,
+  inbound: InboundOption,
+  host = window.location.hostname,
+  publicHost = '',
+): Promise<string> {
+  const endpointHost = resolveShareHost(inbound, inbound.nodeAddress ?? '', preferPublicHost(host, publicHost));
+  const endpoint = `${endpointHost}:${inbound.port || ''}`;
+  const msg = await HttpUtil.get<string>(
+    `/panel/api/awg/client/${inbound.id}/${encodeURIComponent(client.email)}/config`,
+    { endpoint },
+    { silent: true },
+  );
+  if (msg.success && typeof msg.obj === 'string' && msg.obj.trim()) {
+    return msg.obj;
+  }
+  return buildAmneziawgClientConfig(client, inbound, host, publicHost);
+}
+
+export async function resolveTunnelClientConfig(
+  client: ClientRecord,
+  inbound: InboundOption | undefined,
+  host = window.location.hostname,
+  publicHost = '',
+): Promise<string> {
+  if (!inbound) return '';
+  if (inbound.protocol === 'amneziawg') {
+    return fetchAmneziawgClientConfig(client, inbound, host, publicHost);
+  }
+  return buildWireguardClientConfig(client, inbound, host, publicHost);
 }
 
 export function buildClientTunnelConfig(

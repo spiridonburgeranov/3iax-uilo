@@ -6,11 +6,7 @@ import { isPostQuantumLink } from '@/lib/xray/inbound-link';
 import { LinkTags, linkMetaText, parseLinkParts } from '@/lib/xray/link-label';
 import { QrPanel } from '@/pages/inbounds/qr';
 import type { ClientRecord, InboundOption } from '@/hooks/useClients';
-import {
-  buildClientTunnelConfig,
-  clientTunnelConfigLabel,
-  findTunnelInbounds,
-} from './wireguardConfig';
+import { useTunnelClientConfigs } from './useTunnelClientConfigs';
 
 interface SubSettings {
   enable: boolean;
@@ -57,14 +53,12 @@ export default function ClientQrModal({
     return subSettings.subJsonURI + client.subId;
   }, [client?.subId, subSettings?.enable, subSettings?.subJsonEnable, subSettings?.subJsonURI]);
 
-  const tunnelConfigs = useMemo(() => {
-    if (!client) return [];
-    return findTunnelInbounds(client, inboundsById).map((inbound) => ({
-      id: inbound.id,
-      label: clientTunnelConfigLabel(inbound),
-      text: buildClientTunnelConfig(client, inbound, window.location.hostname, subSettings?.publicHost ?? ''),
-    })).filter((item) => item.text.length > 0);
-  }, [client, inboundsById, subSettings?.publicHost]);
+  const { tunnelConfigs, tunnelConfigsLoading } = useTunnelClientConfigs(
+    open,
+    client,
+    inboundsById,
+    subSettings?.publicHost ?? '',
+  );
 
   const hasAnything = !!subLink || !!subJsonLink || tunnelConfigs.length > 0 || links.length > 0;
 
@@ -138,6 +132,7 @@ export default function ClientQrModal({
             value={cfg.text}
             remark={client?.email || 'peer'}
             downloadName={`${client?.email || 'peer'}-${cfg.label.toLowerCase().replace(/\s+/g, '-')}.conf`}
+            showQr={false}
           />
         ),
       });
@@ -162,12 +157,13 @@ export default function ClientQrModal({
       centered
       onCancel={() => onOpenChange(false)}
     >
-      <Spin spinning={loading}>
-        {!client?.subId && !loading && (
-          <div style={{ padding: 24, textAlign: 'center', opacity: 0.6 }}>{t('pages.clients.noSubId')}</div>
-        )}
-        {client?.subId && !hasAnything && !loading && (
-          <div style={{ padding: 24, textAlign: 'center', opacity: 0.6 }}>{t('pages.clients.noLinks')}</div>
+      <Spin spinning={loading || tunnelConfigsLoading}>
+        {!hasAnything && !loading && !tunnelConfigsLoading && (
+          <div style={{ padding: 24, textAlign: 'center', opacity: 0.6 }}>
+            {!client?.subId && tunnelConfigs.length === 0
+              ? t('pages.clients.noSubId')
+              : t('pages.clients.noLinks')}
+          </div>
         )}
         {hasAnything && (
           <Collapse
