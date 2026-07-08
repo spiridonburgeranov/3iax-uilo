@@ -120,9 +120,30 @@ describe('buildWireguardClientConfig', () => {
     expect(cfg).toContain('DNS = 1.1.1.1, 1.0.0.1');
   });
 
-  it('does not build AmneziaWG configs through the WireGuard helper', () => {
-    const cfg = buildClientTunnelConfig(client, { ...inbound, protocol: 'amneziawg' }, 'awg.example.com', '');
-    expect(cfg).toBe('');
+  it('builds AmneziaWG configs with obfuscation fields', () => {
+    const cfg = buildClientTunnelConfig(
+      client,
+      {
+        ...inbound,
+        protocol: 'amneziawg',
+        wgPublicKey: 'DGSYIcEKAUkA7HhzGSjxLZuV67BR3LeyU0BMLJzNVHQ=',
+        awgJc: 4,
+        awgJmin: 50,
+        awgJmax: 1000,
+        awgS1: 0,
+        awgS2: 0,
+        awgH1: '1',
+        awgH2: '2',
+        awgH3: '3',
+        awgH4: '4',
+      },
+      'awg.example.com',
+      '',
+    );
+    expect(cfg).toContain('Jc = 4');
+    expect(cfg).toContain('S1 = 0');
+    expect(cfg).toContain('DNS = 1.1.1.1,2606:4700:4700::1111');
+    expect(cfg).toContain('Endpoint = awg.example.com:51820');
   });
 
   it('labels AmneziaWG configs separately from WireGuard', () => {

@@ -92,7 +92,6 @@ export default function ClientInfoModal({
   const [clientIps, setClientIps] = useState<ClientIpInfo[]>([]);
   const [ipsLoading, setIpsLoading] = useState(false);
   const [ipsClearing, setIpsClearing] = useState(false);
-  const [awgConfigs, setAwgConfigs] = useState<Record<number, string>>({});
   const [ipsModalOpen, setIpsModalOpen] = useState(false);
 
   useEffect(() => {
@@ -146,36 +145,9 @@ export default function ClientInfoModal({
     return findTunnelInbounds(client, inboundsById).map((inbound) => ({
       id: inbound.id,
       label: clientTunnelConfigLabel(inbound),
-      text: inbound.protocol === 'amneziawg'
-        ? awgConfigs[inbound.id] || ''
-        : buildClientTunnelConfig(client, inbound, window.location.hostname, subSettings?.publicHost ?? ''),
+      text: buildClientTunnelConfig(client, inbound, window.location.hostname, subSettings?.publicHost ?? ''),
     })).filter((item) => item.text.length > 0);
-  }, [awgConfigs, client, inboundsById, subSettings?.publicHost]);
-
-  useEffect(() => {
-    const awgClientId = client?.uuid || (client?.id ? String(client.id) : '');
-    if (!open || !awgClientId) {
-      setAwgConfigs({});
-      return;
-    }
-    const awgInbounds = findTunnelInbounds(client, inboundsById).filter((inbound) => inbound.protocol === 'amneziawg');
-    if (awgInbounds.length === 0) {
-      setAwgConfigs({});
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      const next: Record<number, string> = {};
-      for (const inbound of awgInbounds) {
-        const msg = await HttpUtil.get(`/panel/api/awg/client/uuid/${encodeURIComponent(awgClientId)}/config`, undefined, { silent: true }) as ApiMsg<string>;
-        if (msg?.success && typeof msg.obj === 'string') {
-          next[inbound.id] = msg.obj;
-        }
-      }
-      if (!cancelled) setAwgConfigs(next);
-    })();
-    return () => { cancelled = true; };
-  }, [client, inboundsById, open]);
+  }, [client, inboundsById, subSettings?.publicHost]);
 
   async function copyValue(text: string) {
     if (!text) return;

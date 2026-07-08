@@ -653,9 +653,14 @@ func (s *SubService) genWireguardLink(inbound *model.Inbound, email string) stri
 	if dns, ok := settings["dns"].(string); ok && dns != "" {
 		params["dns"] = dns
 	}
-	for _, key := range []string{"jc", "jmin", "jmax", "s1", "s2", "h1", "h2", "h3", "h4"} {
+	for _, key := range []string{"jc", "jmin", "jmax", "s1", "s2", "s3", "s4", "h1", "h2", "h3", "h4"} {
 		if value, ok := settings[key].(float64); ok && value >= 0 {
 			params[key] = strconv.Itoa(int(value))
+		}
+	}
+	for _, key := range []string{"i1", "i2", "i3", "i4", "i5"} {
+		if value, ok := settings[key].(string); ok && strings.TrimSpace(value) != "" {
+			params[key] = value
 		}
 	}
 	if client.PreSharedKey != "" {

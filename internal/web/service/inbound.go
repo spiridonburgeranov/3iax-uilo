@@ -921,10 +921,10 @@ func (s *InboundService) AddInbound(inbound *model.Inbound) (*model.Inbound, boo
 	needRestart := false
 	if inbound.Enable {
 		if inbound.NodeID == nil && inbound.Protocol == model.AmneziaWG {
-			if err := (&AwgService{}).ToggleServer(true); err != nil {
+			if err := (&AwgInboundService{}).Apply(inbound); err != nil {
 				return inbound, false, err
 			}
-			return inbound, false, err
+			return inbound, false, nil
 		}
 		rt, push, dirty, perr := s.nodePushPlan(inbound)
 		if perr != nil {
@@ -979,7 +979,7 @@ func (s *InboundService) DelInbound(id int) (bool, error) {
 	loadErr := db.Model(model.Inbound{}).Where("id = ?", id).First(&ib).Error
 	if loadErr == nil {
 		if ib.NodeID == nil && ib.Protocol == model.AmneziaWG {
-			_ = (&AwgService{}).ToggleServer(false)
+			_ = (&AwgInboundService{}).Remove(&ib)
 		}
 		shouldPushToRuntime := ib.NodeID != nil || ib.Enable
 		if shouldPushToRuntime {
@@ -1134,7 +1134,11 @@ func (s *InboundService) SetInboundEnable(id int, enable bool) (bool, error) {
 	}
 	inbound.Enable = enable
 	if inbound.NodeID == nil && inbound.Protocol == model.AmneziaWG {
-		if err := (&AwgService{}).ToggleServer(enable); err != nil {
+		if enable {
+			if err := (&AwgInboundService{}).Apply(inbound); err != nil {
+				return false, err
+			}
+		} else if err := (&AwgInboundService{}).Disable(inbound); err != nil {
 			return false, err
 		}
 		return false, nil
@@ -1454,10 +1458,10 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 		return inbound, false, txErr
 	}
 	if disableAWGAfterCommit {
-		_ = (&AwgService{}).ToggleServer(false)
+		_ = (&AwgInboundService{}).Disable(oldInbound)
 	}
 	if applyAWGAfterCommit {
-		if err := (&AwgService{}).ToggleServer(true); err != nil {
+		if err := (&AwgInboundService{}).Apply(oldInbound); err != nil {
 			return inbound, false, err
 		}
 	}

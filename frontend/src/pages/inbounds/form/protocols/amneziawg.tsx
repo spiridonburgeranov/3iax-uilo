@@ -16,6 +16,10 @@ export default function AmneziawgFields(props: AmneziawgFieldsProps) {
         <Input placeholder="10.66.66.1/24" />
       </Form.Item>
 
+      <Form.Item name={['settings', 'awgInterface']} label="AWG interface">
+        <Input placeholder="awg0" />
+      </Form.Item>
+
       <Form.Item name={['settings', 'externalInterface']} label="External interface">
         <Input placeholder="eth0" />
       </Form.Item>

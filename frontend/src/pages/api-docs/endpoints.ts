@@ -1472,119 +1472,54 @@ export const sections: readonly Section[] = [
     id: 'amneziawg',
     title: 'AmneziaWGv2',
     description:
-      'Manage the dedicated AmneziaWGv2 server, runtime state, peers, and app-ready client configs. These endpoints operate on the AWG interface and are separate from Xray inbounds.',
+      'Manage AmneziaWG interfaces through awg/awg-quick. Each local amneziawg inbound maps to one interface and config file; peers are inbound clients.',
     endpoints: [
       {
         method: 'GET',
-        path: '/panel/api/awg/server',
-        summary: 'Return the AmneziaWGv2 server settings, creating defaults on first use.',
+        path: '/panel/api/awg/discovered',
+        summary: 'List discovered AWG interfaces from config files and the running awg runtime.',
       },
       {
         method: 'POST',
-        path: '/panel/api/awg/server',
-        summary: 'Save AmneziaWGv2 server settings and re-apply the interface when enabled.',
-        params: [
-          { name: 'body', in: 'body (json)', type: 'object', desc: 'AwgServer settings.' },
-        ],
+        path: '/panel/api/awg/scan/import',
+        summary: 'Import discovered interfaces into amneziawg inbounds.',
+        body: '{\n  "force": false\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/awg/inbounds',
+        summary: 'List local amneziawg inbounds with runtime peer stats.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/awg/restore',
+        summary: 'Restore all enabled amneziawg inbounds through awg-quick.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/awg/toggle',
+        summary: 'Start or stop all local amneziawg inbounds.',
+        body: '{\n  "enable": true\n}',
       },
       {
         method: 'POST',
         path: '/panel/api/awg/server/toggle',
-        summary: 'Start or stop the AmneziaWGv2 interface.',
+        summary: 'Alias for /panel/api/awg/toggle.',
         body: '{\n  "enable": true\n}',
       },
       {
         method: 'GET',
         path: '/panel/api/awg/server/status',
-        summary: 'Return AWG runtime availability, running state, and installed awg version.',
+        summary: 'Return AWG runtime availability, aggregate peer counts, and per-inbound status.',
       },
       {
         method: 'GET',
-        path: '/panel/api/awg/clients',
-        summary: 'List AmneziaWGv2 peers managed by the panel.',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/awg/client/add',
-        summary: 'Create an AmneziaWGv2 peer and apply the interface config.',
+        path: '/panel/api/awg/client/:inboundId/:email/config',
+        summary: 'Return an Amnezia app-ready client config for an inbound client.',
         params: [
-          { name: 'body', in: 'body (json)', type: 'object', desc: 'AwgClient fields.' },
-        ],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/awg/client/update/:id',
-        summary: 'Update an AmneziaWGv2 peer by numeric ID.',
-        params: [
-          { name: 'id', in: 'path', type: 'integer', desc: 'AWG client ID.' },
-          { name: 'body', in: 'body (json)', type: 'object', desc: 'AwgClient fields.' },
-        ],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/awg/client/updateByUuid/:uuid',
-        summary: 'Update an AmneziaWGv2 peer by UUID shared with the panel client.',
-        params: [
-          { name: 'uuid', in: 'path', type: 'string', desc: 'AWG client UUID.' },
-          { name: 'body', in: 'body (json)', type: 'object', desc: 'AwgClient fields.' },
-        ],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/awg/client/del/:id',
-        summary: 'Delete an AmneziaWGv2 peer by numeric ID.',
-        params: [
-          { name: 'id', in: 'path', type: 'integer', desc: 'AWG client ID.' },
-        ],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/awg/client/delByUuid/:uuid',
-        summary: 'Delete an AmneziaWGv2 peer by UUID.',
-        params: [
-          { name: 'uuid', in: 'path', type: 'string', desc: 'AWG client UUID.' },
-        ],
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/awg/client/toggle/:id',
-        summary: 'Enable or disable an AmneziaWGv2 peer by numeric ID.',
-        params: [
-          { name: 'id', in: 'path', type: 'integer', desc: 'AWG client ID.' },
-        ],
-        body: '{\n  "enable": true\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/awg/client/toggleByUuid/:uuid',
-        summary: 'Enable or disable an AmneziaWGv2 peer by UUID.',
-        params: [
-          { name: 'uuid', in: 'path', type: 'string', desc: 'AWG client UUID.' },
-        ],
-        body: '{\n  "enable": true\n}',
-      },
-      {
-        method: 'POST',
-        path: '/panel/api/awg/client/reissue/:id',
-        summary: 'Regenerate keys for an AmneziaWGv2 peer and turn a runtime import into a managed client.',
-        params: [
-          { name: 'id', in: 'path', type: 'integer', desc: 'AWG client ID.' },
-        ],
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/awg/client/:id/config',
-        summary: 'Return an Amnezia app-ready client config by numeric ID.',
-        params: [
-          { name: 'id', in: 'path', type: 'integer', desc: 'AWG client ID.' },
-        ],
-      },
-      {
-        method: 'GET',
-        path: '/panel/api/awg/client/uuid/:uuid/config',
-        summary: 'Return an Amnezia app-ready client config by UUID.',
-        params: [
-          { name: 'uuid', in: 'path', type: 'string', desc: 'AWG client UUID.' },
+          { name: 'inboundId', in: 'path', type: 'integer', desc: 'AmneziaWG inbound ID.' },
+          { name: 'email', in: 'path', type: 'string', desc: 'Client email.' },
+          { name: 'endpoint', in: 'query', type: 'string', desc: 'Optional endpoint host override.' },
         ],
       },
     ],

@@ -475,10 +475,12 @@ func (s *ClientService) addInboundClient(inboundSvc *InboundService, data *model
 	// Apply to the running runtime after commit — outside the serialized writer
 	// so a slow node call can't stall traffic accounting.
 	if oldInbound.Protocol == model.AmneziaWG && oldInbound.NodeID == nil {
-		for i := range clients {
-			if err := syncAwgClientFromInboundClient(&clients[i]); err != nil {
-				return true, err
-			}
+		refreshed, rerr := inboundSvc.GetInbound(oldInbound.Id)
+		if rerr != nil {
+			return true, rerr
+		}
+		if err := (&AwgInboundService{}).Apply(refreshed); err != nil {
+			return true, err
 		}
 		return false, nil
 	}
@@ -848,7 +850,11 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	}
 
 	if oldInbound.Protocol == model.AmneziaWG && oldInbound.NodeID == nil {
-		if err := syncAwgClientFromInboundClient(&clients[0]); err != nil {
+		refreshed, rerr := inboundSvc.GetInbound(oldInbound.Id)
+		if rerr != nil {
+			return true, rerr
+		}
+		if err := (&AwgInboundService{}).Apply(refreshed); err != nil {
 			return true, err
 		}
 		return false, nil
@@ -935,7 +941,6 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 	var newClients []any
 	needApiDel := false
 	found := false
-	awgClientUUID := ""
 
 	for _, client := range interfaceClients {
 		c, ok := client.(map[string]any)
@@ -945,9 +950,6 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 		if cEmail, ok := c["email"].(string); ok && cEmail == email {
 			found = true
 			needApiDel, _ = c["enable"].(bool)
-			if id, ok := c["id"].(string); ok {
-				awgClientUUID = strings.TrimSpace(id)
-			}
 		} else {
 			newClients = append(newClients, client)
 		}
@@ -1040,10 +1042,12 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 	// inbound's runtime even when the same email survives in another inbound.
 	if len(email) > 0 {
 		if oldInbound.Protocol == model.AmneziaWG && oldInbound.NodeID == nil {
-			if awgClientUUID != "" {
-				if err := (&AwgService{}).DeleteClientByUUID(awgClientUUID); err != nil {
-					return true, err
-				}
+			refreshed, rerr := inboundSvc.GetInbound(inboundId)
+			if rerr != nil {
+				return true, rerr
+			}
+			if err := (&AwgInboundService{}).Apply(refreshed); err != nil {
+				return true, err
 			}
 			return false, nil
 		}

@@ -42,5 +42,6 @@ export const AmneziawgInboundSettingsSchema = z.object({
   i3: z.string().optional(),
   i4: z.string().optional(),
   i5: z.string().optional(),
+  awgInterface: z.string().optional(),
 });
 export type AmneziawgInboundSettings = z.infer<typeof AmneziawgInboundSettingsSchema>;

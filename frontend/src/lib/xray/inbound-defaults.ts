@@ -282,6 +282,7 @@ export function createDefaultAmneziawgInboundSettings(
     mtu: seed.mtu ?? 1420,
     secretKey: seed.secretKey ?? Wireguard.generateKeypair().privateKey,
     address: '10.66.66.1/24',
+    awgInterface: '',
     externalInterface: '',
     postUp: '',
     postDown: '',

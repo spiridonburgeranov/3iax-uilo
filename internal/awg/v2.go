@@ -24,10 +24,10 @@ func WriteServerConfig(interfaceName string, config string) error {
 	if strings.TrimSpace(interfaceName) == "" {
 		interfaceName = "awg0"
 	}
-	if err := os.MkdirAll(defaultConfigDir, 0o700); err != nil {
+	if err := os.MkdirAll(ConfigDir(), 0o700); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}
-	path := filepath.Join(defaultConfigDir, interfaceName+".conf")
+	path := filepath.Join(ConfigDir(), interfaceName+".conf")
 	if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
 		return fmt.Errorf("write config: %w", err)
 	}
@@ -38,28 +38,28 @@ func RemoveServerConfig(interfaceName string) {
 	if strings.TrimSpace(interfaceName) == "" {
 		interfaceName = "awg0"
 	}
-	_ = os.Remove(filepath.Join(defaultConfigDir, interfaceName+".conf"))
+	_ = os.Remove(filepath.Join(ConfigDir(), interfaceName+".conf"))
 }
 
 func InterfaceUp(interfaceName string) error {
 	if strings.TrimSpace(interfaceName) == "" {
 		interfaceName = "awg0"
 	}
-	return up(filepath.Join(defaultConfigDir, interfaceName+".conf"))
+	return up(filepath.Join(ConfigDir(), interfaceName+".conf"))
 }
 
 func InterfaceDown(interfaceName string) error {
 	if strings.TrimSpace(interfaceName) == "" {
 		interfaceName = "awg0"
 	}
-	return down(filepath.Join(defaultConfigDir, interfaceName+".conf"))
+	return down(filepath.Join(ConfigDir(), interfaceName+".conf"))
 }
 
 func SyncConfig(interfaceName string) error {
 	if strings.TrimSpace(interfaceName) == "" {
 		interfaceName = "awg0"
 	}
-	return sync(interfaceName, filepath.Join(defaultConfigDir, interfaceName+".conf"))
+	return sync(interfaceName, filepath.Join(ConfigDir(), interfaceName+".conf"))
 }
 
 func IsInterfaceUp(interfaceName string) bool {

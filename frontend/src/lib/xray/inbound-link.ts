@@ -7,6 +7,7 @@ import type {
   WireguardInboundPeer,
   WireguardInboundSettings,
 } from '@/schemas/protocols/inbound/wireguard';
+import type { AmneziawgInboundSettings } from '@/schemas/protocols/inbound/amneziawg';
 import type { ExternalProxyEntry } from '@/schemas/protocols/stream/external-proxy';
 import type { FinalMaskStreamSettings } from '@/schemas/protocols/stream/finalmask';
 import type { XHttpStreamSettings } from '@/schemas/protocols/stream/xhttp';
@@ -1226,6 +1227,9 @@ export function genInboundLinks(input: GenInboundLinksInput): string {
   if (inbound.protocol === 'wireguard') {
     return genWireguardConfigs({ inbound, remark, hostOverride, fallbackHostname });
   }
+  if (inbound.protocol === 'amneziawg') {
+    return genAmneziawgConfigs({ inbound, remark, hostOverride, fallbackHostname });
+  }
   return '';
 }
 
@@ -1286,6 +1290,88 @@ export function genWireguardConfigs(input: GenWireguardFanoutInput): string {
       port: inbound.port,
       remark: `${remark}${sep}${i + 1}${wgPeerCommentSuffix(p)}`,
       peerIndex: i,
+    }))
+    .join('\r\n');
+}
+
+function awgRenderPeers(settings: AmneziawgInboundSettings): WireguardInboundPeer[] {
+  const clients = settings.clients ?? [];
+  if (clients.length > 0) {
+    return clients.map((c) => ({ ...c, publicKey: c.publicKey ?? '' }));
+  }
+  return settings.peers;
+}
+
+export function genAmneziawgConfig(input: {
+  awgSettings: AmneziawgInboundSettings;
+  peer: WireguardInboundPeer;
+  address: string;
+  port: number;
+  remark?: string;
+}): string {
+  const { awgSettings, peer, address, port, remark = '' } = input;
+  if (!peer) return '';
+
+  const pubKey = awgSettings.secretKey.length > 0
+    ? Wireguard.generateKeypair(awgSettings.secretKey).publicKey
+    : '';
+
+  const lines = [
+    '[Interface]',
+    `PrivateKey = ${peer.privateKey ?? ''}`,
+    `Address = ${peer.allowedIPs[0] ?? ''}`,
+    `DNS = ${awgSettings.dns || '1.1.1.1,2606:4700:4700::1111'}`,
+  ];
+  if (typeof awgSettings.mtu === 'number' && awgSettings.mtu > 0) {
+    lines.push(`MTU = ${awgSettings.mtu}`);
+  }
+  lines.push(
+    `Jc = ${awgSettings.jc ?? 4}`,
+    `Jmin = ${awgSettings.jmin ?? 64}`,
+    `Jmax = ${awgSettings.jmax ?? 256}`,
+    `S1 = ${awgSettings.s1 ?? 15}`,
+    `S2 = ${awgSettings.s2 ?? 25}`,
+    `S3 = ${awgSettings.s3 ?? 35}`,
+    `S4 = ${awgSettings.s4 ?? 15}`,
+  );
+  for (const [label, value] of [
+    ['H1', awgSettings.h1],
+    ['H2', awgSettings.h2],
+    ['H3', awgSettings.h3],
+    ['H4', awgSettings.h4],
+    ['I1', awgSettings.i1],
+    ['I2', awgSettings.i2],
+    ['I3', awgSettings.i3],
+    ['I4', awgSettings.i4],
+    ['I5', awgSettings.i5],
+  ] as const) {
+    if (typeof value === 'string' && value.trim() !== '') {
+      lines.push(`${label} = ${value.trim()}`);
+    }
+  }
+  lines.push('', `# ${remark}`, '[Peer]', `PublicKey = ${pubKey}`, 'AllowedIPs = 0.0.0.0/0, ::/0', `Endpoint = ${address}:${port}`);
+  if (peer.preSharedKey && peer.preSharedKey.length > 0) {
+    lines.push(`PresharedKey = ${peer.preSharedKey}`);
+  }
+  const keepAlive = typeof peer.keepAlive === 'number' && peer.keepAlive > 0 ? peer.keepAlive : 25;
+  lines.push(`PersistentKeepalive = ${keepAlive}`);
+  return lines.join('\n');
+}
+
+export function genAmneziawgConfigs(input: GenWireguardFanoutInput): string {
+  const { inbound, remark = '', hostOverride = '', fallbackHostname } = input;
+  if (inbound.protocol !== 'amneziawg') return '';
+  const addr = resolveAddr(inbound, hostOverride, fallbackHostname);
+  const sep = '-';
+  const baseSettings = inbound.settings as AmneziawgInboundSettings;
+  const peers = awgRenderPeers(baseSettings);
+  return peers
+    .map((p, i) => genAmneziawgConfig({
+      awgSettings: baseSettings,
+      peer: p,
+      address: addr,
+      port: inbound.port,
+      remark: `${remark}${sep}${i + 1}${wgPeerCommentSuffix(p)}`,
     }))
     .join('\r\n');
 }

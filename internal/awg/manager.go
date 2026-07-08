@@ -18,6 +18,23 @@ import (
 	wgutil "github.com/mhsanaei/3x-ui/v3/internal/util/wireguard"
 )
 
+type ClientConfigInput struct {
+	PrivateKey        string
+	PublicKey         string
+	AllowedIPs        []string
+	PreSharedKey      string
+	KeepAlive         int
+	Jc                int
+	Jmin              int
+	Jmax              int
+	I1                string
+	I2                string
+	I3                string
+	I4                string
+	I5                string
+	ClientAllowedIPs  string
+}
+
 const defaultConfigDir = "/etc/amnezia/amneziawg"
 
 type peer struct {
@@ -33,6 +50,7 @@ type inboundSettings struct {
 	MTU               int          `json:"mtu"`
 	DNS               string       `json:"dns"`
 	Address           string       `json:"address"`
+	AwgInterface      string       `json:"awgInterface"`
 	Peers             []peerConfig `json:"peers"`
 	Clients           []model.Client
 	Jc                int    `json:"jc"`
@@ -46,6 +64,11 @@ type inboundSettings struct {
 	H2                string `json:"h2"`
 	H3                string `json:"h3"`
 	H4                string `json:"h4"`
+	I1                string `json:"i1"`
+	I2                string `json:"i2"`
+	I3                string `json:"i3"`
+	I4                string `json:"i4"`
+	I5                string `json:"i5"`
 	ExternalInterface string `json:"externalInterface"`
 	PostUp            string `json:"postUp"`
 	PostDown          string `json:"postDown"`
@@ -111,7 +134,7 @@ func IsInboundUp(inbound *model.Inbound) bool {
 	if inbound == nil {
 		return false
 	}
-	return isUp(interfaceName(inbound))
+	return isUp(InterfaceName(inbound))
 }
 
 func RuntimePeers(inbound *model.Inbound) ([]PeerRuntime, error) {
@@ -130,7 +153,7 @@ func RuntimePeers(inbound *model.Inbound) ([]PeerRuntime, error) {
 	for _, p := range configPeers {
 		emailByKey[p.PublicKey] = p.Email
 	}
-	iface := interfaceName(inbound)
+	iface := InterfaceName(inbound)
 	rows, err := dumpPeers(iface)
 	if err != nil {
 		return nil, err
@@ -212,15 +235,15 @@ func ApplyInbound(inbound *model.Inbound) error {
 	if !IsInstalled() {
 		return common.NewError("amneziawg runtime is not installed (missing awg/awg-quick)")
 	}
-	iface := interfaceName(inbound)
+	iface := InterfaceName(inbound)
 	cfg, err := buildConfig(inbound)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(defaultConfigDir, 0o700); err != nil {
+	if err := os.MkdirAll(ConfigDir(), 0o700); err != nil {
 		return fmt.Errorf("create awg config directory: %w", err)
 	}
-	path := filepath.Join(defaultConfigDir, iface+".conf")
+	path := filepath.Join(ConfigDir(), iface+".conf")
 	if err := os.WriteFile(path, []byte(cfg), 0o600); err != nil {
 		return fmt.Errorf("write awg config: %w", err)
 	}
@@ -240,8 +263,8 @@ func DisableInbound(inbound *model.Inbound) error {
 	if !IsInstalled() {
 		return nil
 	}
-	iface := interfaceName(inbound)
-	path := filepath.Join(defaultConfigDir, iface+".conf")
+	iface := InterfaceName(inbound)
+	path := filepath.Join(ConfigDir(), iface+".conf")
 	_ = down(path)
 	return nil
 }
@@ -250,14 +273,21 @@ func RemoveConfig(inbound *model.Inbound) error {
 	if inbound == nil {
 		return nil
 	}
-	path := filepath.Join(defaultConfigDir, interfaceName(inbound)+".conf")
+	path := filepath.Join(ConfigDir(), InterfaceName(inbound)+".conf")
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
 }
 
-func interfaceName(inbound *model.Inbound) string {
+func InterfaceName(inbound *model.Inbound) string {
+	var parsed inboundSettings
+	if inbound != nil && strings.TrimSpace(inbound.Settings) != "" {
+		_ = json.Unmarshal([]byte(inbound.Settings), &parsed)
+		if name := strings.TrimSpace(parsed.AwgInterface); name != "" {
+			return name
+		}
+	}
 	if inbound.Tag != "" {
 		re := regexp.MustCompile(`[^a-zA-Z0-9_]`)
 		tag := strings.ToLower(re.ReplaceAllString(inbound.Tag, "_"))
@@ -296,18 +326,7 @@ func buildConfig(inbound *model.Inbound) (string, error) {
 	if strings.TrimSpace(parsed.DNS) != "" {
 		lines = append(lines, "DNS = "+strings.TrimSpace(parsed.DNS))
 	}
-	jc, jmin, jmax, s1, s2, s3, s4, h1, h2, h3, h4 := obfuscationParams(&parsed)
-	lines = append(lines, fmt.Sprintf("Jc = %d", jc))
-	lines = append(lines, fmt.Sprintf("Jmin = %d", jmin))
-	lines = append(lines, fmt.Sprintf("Jmax = %d", jmax))
-	lines = append(lines, fmt.Sprintf("S1 = %d", s1))
-	lines = append(lines, fmt.Sprintf("S2 = %d", s2))
-	lines = append(lines, fmt.Sprintf("S3 = %d", s3))
-	lines = append(lines, fmt.Sprintf("S4 = %d", s4))
-	lines = append(lines, "H1 = "+h1)
-	lines = append(lines, "H2 = "+h2)
-	lines = append(lines, "H3 = "+h3)
-	lines = append(lines, "H4 = "+h4)
+	appendObfuscationLines(&lines, &parsed)
 	if postUp := buildPostUp(inbound, &parsed, serverAddr); postUp != "" {
 		lines = append(lines, "PostUp = "+postUp)
 	}
@@ -335,36 +354,162 @@ func buildConfig(inbound *model.Inbound) (string, error) {
 	return strings.Join(lines, "\n") + "\n", nil
 }
 
-func obfuscationParams(parsed *inboundSettings) (int, int, int, int, int, int, int, string, string, string, string) {
-	jc := parsed.Jc
+func appendObfuscationLines(lines *[]string, parsed *inboundSettings) {
+	*lines = append(*lines, fmt.Sprintf("Jc = %d", parsed.Jc))
+	*lines = append(*lines, fmt.Sprintf("Jmin = %d", parsed.Jmin))
+	*lines = append(*lines, fmt.Sprintf("Jmax = %d", parsed.Jmax))
+	*lines = append(*lines, fmt.Sprintf("S1 = %d", parsed.S1))
+	*lines = append(*lines, fmt.Sprintf("S2 = %d", parsed.S2))
+	*lines = append(*lines, fmt.Sprintf("S3 = %d", parsed.S3))
+	*lines = append(*lines, fmt.Sprintf("S4 = %d", parsed.S4))
+	if strings.TrimSpace(parsed.H1) != "" {
+		*lines = append(*lines, "H1 = "+strings.TrimSpace(parsed.H1))
+	}
+	if strings.TrimSpace(parsed.H2) != "" {
+		*lines = append(*lines, "H2 = "+strings.TrimSpace(parsed.H2))
+	}
+	if strings.TrimSpace(parsed.H3) != "" {
+		*lines = append(*lines, "H3 = "+strings.TrimSpace(parsed.H3))
+	}
+	if strings.TrimSpace(parsed.H4) != "" {
+		*lines = append(*lines, "H4 = "+strings.TrimSpace(parsed.H4))
+	}
+	for idx, value := range []string{parsed.I1, parsed.I2, parsed.I3, parsed.I4, parsed.I5} {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			*lines = append(*lines, fmt.Sprintf("I%d = %s", idx+1, value))
+		}
+	}
+}
+
+func ParseInboundSettings(settings string) (inboundSettings, error) {
+	var parsed inboundSettings
+	if strings.TrimSpace(settings) == "" {
+		return parsed, common.NewError("empty amneziawg settings")
+	}
+	if err := json.Unmarshal([]byte(settings), &parsed); err != nil {
+		return parsed, common.NewError("invalid amneziawg inbound settings:", err)
+	}
+	return parsed, nil
+}
+
+func GenerateClientConfig(inbound *model.Inbound, client ClientConfigInput, endpoint string) (string, error) {
+	if inbound == nil {
+		return "", common.NewError("inbound is required")
+	}
+	parsed, err := ParseInboundSettings(inbound.Settings)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(parsed.SecretKey) == "" {
+		return "", common.NewError("amneziawg secretKey is required")
+	}
+	serverPub, err := wgutil.PublicKeyFromPrivate(strings.TrimSpace(parsed.SecretKey))
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(client.PrivateKey) == "" {
+		return "", common.NewError("client private key is required")
+	}
+	address := strings.Join(client.AllowedIPs, ", ")
+	if address == "" {
+		address = "10.66.66.2/32"
+	}
+	lines := []string{"[Interface]"}
+	lines = append(lines, "PrivateKey = "+strings.TrimSpace(client.PrivateKey))
+	lines = append(lines, "Address = "+address)
+	dns := strings.TrimSpace(parsed.DNS)
+	if dns == "" {
+		dns = "1.1.1.1,2606:4700:4700::1111"
+	}
+	lines = append(lines, "DNS = "+dns)
+	if parsed.MTU > 0 {
+		lines = append(lines, fmt.Sprintf("MTU = %d", parsed.MTU))
+	}
+	jc := client.Jc
 	if jc <= 0 {
-		jc = 4
+		jc = parsed.Jc
 	}
-	jmin := parsed.Jmin
+	jmin := client.Jmin
 	if jmin <= 0 {
-		jmin = 64
+		jmin = parsed.Jmin
 	}
-	jmax := parsed.Jmax
+	jmax := client.Jmax
 	if jmax <= 0 {
-		jmax = 256
+		jmax = parsed.Jmax
 	}
-	s1 := parsed.S1
-	if s1 <= 0 {
-		s1 = 15
+	lines = append(lines, fmt.Sprintf("Jc = %d", jc))
+	lines = append(lines, fmt.Sprintf("Jmin = %d", jmin))
+	lines = append(lines, fmt.Sprintf("Jmax = %d", jmax))
+	lines = append(lines, fmt.Sprintf("S1 = %d", parsed.S1))
+	lines = append(lines, fmt.Sprintf("S2 = %d", parsed.S2))
+	lines = append(lines, fmt.Sprintf("S3 = %d", parsed.S3))
+	lines = append(lines, fmt.Sprintf("S4 = %d", parsed.S4))
+	if strings.TrimSpace(parsed.H1) != "" {
+		lines = append(lines, "H1 = "+strings.TrimSpace(parsed.H1))
 	}
-	s2 := parsed.S2
-	if s2 <= 0 {
-		s2 = 25
+	if strings.TrimSpace(parsed.H2) != "" {
+		lines = append(lines, "H2 = "+strings.TrimSpace(parsed.H2))
 	}
-	s3 := parsed.S3
-	if s3 <= 0 {
-		s3 = 35
+	if strings.TrimSpace(parsed.H3) != "" {
+		lines = append(lines, "H3 = "+strings.TrimSpace(parsed.H3))
 	}
-	s4 := parsed.S4
-	if s4 <= 0 {
-		s4 = 15
+	if strings.TrimSpace(parsed.H4) != "" {
+		lines = append(lines, "H4 = "+strings.TrimSpace(parsed.H4))
 	}
-	return jc, jmin, jmax, s1, s2, s3, s4, nonEmpty(parsed.H1, "1"), nonEmpty(parsed.H2, "2"), nonEmpty(parsed.H3, "3"), nonEmpty(parsed.H4, "4")
+	for idx, fallback := range []string{parsed.I1, parsed.I2, parsed.I3, parsed.I4, parsed.I5} {
+		value := fallback
+		switch idx {
+		case 0:
+			if strings.TrimSpace(client.I1) != "" {
+				value = client.I1
+			}
+		case 1:
+			if strings.TrimSpace(client.I2) != "" {
+				value = client.I2
+			}
+		case 2:
+			if strings.TrimSpace(client.I3) != "" {
+				value = client.I3
+			}
+		case 3:
+			if strings.TrimSpace(client.I4) != "" {
+				value = client.I4
+			}
+		case 4:
+			if strings.TrimSpace(client.I5) != "" {
+				value = client.I5
+			}
+		}
+		value = strings.TrimSpace(value)
+		if value != "" {
+			lines = append(lines, fmt.Sprintf("I%d = %s", idx+1, value))
+		}
+	}
+	lines = append(lines, "", "[Peer]", "PublicKey = "+serverPub)
+	if strings.TrimSpace(client.PreSharedKey) != "" {
+		lines = append(lines, "PresharedKey = "+strings.TrimSpace(client.PreSharedKey))
+	}
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint != "" {
+		if !strings.Contains(endpoint, ":") && inbound.Port > 0 {
+			endpoint = fmt.Sprintf("%s:%d", endpoint, inbound.Port)
+		}
+		lines = append(lines, "Endpoint = "+endpoint)
+	}
+	allowed := strings.TrimSpace(client.ClientAllowedIPs)
+	if allowed == "" {
+		allowed = "0.0.0.0/0, ::/0"
+	}
+	lines = append(lines, "AllowedIPs = "+allowed)
+	keepAlive := client.KeepAlive
+	if keepAlive <= 0 {
+		keepAlive = 25
+	}
+	if keepAlive > 0 {
+		lines = append(lines, fmt.Sprintf("PersistentKeepalive = %d", keepAlive))
+	}
+	return strings.Join(lines, "\n") + "\n", nil
 }
 
 func buildPostUp(inbound *model.Inbound, parsed *inboundSettings, serverAddr string) string {
@@ -379,7 +524,7 @@ func buildPostUp(inbound *model.Inbound, parsed *inboundSettings, serverAddr str
 	if prefix == "" {
 		return "sysctl -w net.ipv4.ip_forward=1"
 	}
-	name := interfaceName(inbound)
+	name := InterfaceName(inbound)
 	return strings.Join([]string{
 		fmt.Sprintf("iptables -t nat -A POSTROUTING -s %s -o %s -j MASQUERADE", prefix, iface),
 		fmt.Sprintf("iptables -A FORWARD -i %s -j ACCEPT", name),
@@ -400,7 +545,7 @@ func buildPostDown(inbound *model.Inbound, parsed *inboundSettings, serverAddr s
 	if prefix == "" {
 		return ""
 	}
-	name := interfaceName(inbound)
+	name := InterfaceName(inbound)
 	return strings.Join([]string{
 		fmt.Sprintf("iptables -t nat -D POSTROUTING -s %s -o %s -j MASQUERADE", prefix, iface),
 		fmt.Sprintf("iptables -D FORWARD -i %s -j ACCEPT", name),

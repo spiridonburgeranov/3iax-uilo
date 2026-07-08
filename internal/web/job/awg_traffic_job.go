@@ -3,7 +3,7 @@ package job
 import "github.com/mhsanaei/3x-ui/v3/internal/web/service"
 
 type AwgTrafficJob struct {
-	awgService service.AwgService
+	awgInboundService service.AwgInboundService
 }
 
 func NewAwgTrafficJob() *AwgTrafficJob {
@@ -11,5 +11,5 @@ func NewAwgTrafficJob() *AwgTrafficJob {
 }
 
 func (j *AwgTrafficJob) Run() {
-	j.awgService.UpdateTrafficStats()
+	j.awgInboundService.UpdateTrafficStats()
 }

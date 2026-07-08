@@ -661,7 +661,7 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		}
 	})
 
-	(&service.AwgService{}).StartIfEnabled()
+	(&service.AwgInboundService{}).StartupScanAndImport()
 
 	s.startTask(restartXray)
 
