@@ -66,27 +66,43 @@ func (s *AwgService) GetServer() (*model.AwgServer, error) {
 		changed = true
 	}
 	if server.Jmin <= 0 {
-		server.Jmin = 50
+		server.Jmin = 64
 		changed = true
 	}
 	if server.Jmax <= 0 {
-		server.Jmax = 1000
+		server.Jmax = 256
+		changed = true
+	}
+	if server.S1 <= 0 {
+		server.S1 = 15
+		changed = true
+	}
+	if server.S2 <= 0 {
+		server.S2 = 25
+		changed = true
+	}
+	if server.S3 <= 0 {
+		server.S3 = 35
+		changed = true
+	}
+	if server.S4 <= 0 {
+		server.S4 = 15
 		changed = true
 	}
 	if server.H1 <= 0 {
-		server.H1 = 1
+		server.H1 = 5
 		changed = true
 	}
 	if server.H2 <= 0 {
-		server.H2 = 2
+		server.H2 = 10
 		changed = true
 	}
 	if server.H3 <= 0 {
-		server.H3 = 3
+		server.H3 = 15
 		changed = true
 	}
 	if server.H4 <= 0 {
-		server.H4 = 4
+		server.H4 = 20
 		changed = true
 	}
 	if changed {
@@ -240,6 +256,30 @@ func (s *AwgService) AddClient(client *model.AwgClient) error {
 	if strings.TrimSpace(client.ClientAllowedIPs) == "" {
 		client.ClientAllowedIPs = "0.0.0.0/0, ::/0"
 	}
+	if client.Jc <= 0 {
+		client.Jc = server.Jc
+	}
+	if client.Jmin <= 0 {
+		client.Jmin = server.Jmin
+	}
+	if client.Jmax <= 0 {
+		client.Jmax = server.Jmax
+	}
+	if strings.TrimSpace(client.I1) == "" {
+		client.I1 = server.I1
+	}
+	if strings.TrimSpace(client.I2) == "" {
+		client.I2 = server.I2
+	}
+	if strings.TrimSpace(client.I3) == "" {
+		client.I3 = server.I3
+	}
+	if strings.TrimSpace(client.I4) == "" {
+		client.I4 = server.I4
+	}
+	if strings.TrimSpace(client.I5) == "" {
+		client.I5 = server.I5
+	}
 	if client.PersistentKeepalive <= 0 {
 		client.PersistentKeepalive = 25
 	}
@@ -270,6 +310,30 @@ func (s *AwgService) UpdateClient(client *model.AwgClient) error {
 		}
 		if strings.TrimSpace(client.PresharedKey) == "" {
 			client.PresharedKey = old.PresharedKey
+		}
+		if client.Jc <= 0 {
+			client.Jc = old.Jc
+		}
+		if client.Jmin <= 0 {
+			client.Jmin = old.Jmin
+		}
+		if client.Jmax <= 0 {
+			client.Jmax = old.Jmax
+		}
+		if strings.TrimSpace(client.I1) == "" {
+			client.I1 = old.I1
+		}
+		if strings.TrimSpace(client.I2) == "" {
+			client.I2 = old.I2
+		}
+		if strings.TrimSpace(client.I3) == "" {
+			client.I3 = old.I3
+		}
+		if strings.TrimSpace(client.I4) == "" {
+			client.I4 = old.I4
+		}
+		if strings.TrimSpace(client.I5) == "" {
+			client.I5 = old.I5
 		}
 		if strings.TrimSpace(client.IPv4Address) == "" {
 			client.IPv4Address = old.IPv4Address
@@ -444,6 +508,14 @@ func runtimePeerToClient(server *model.AwgServer, peer awg.PeerRuntime) *model.A
 		Enable:      true,
 		Comment:     "Imported from running AmneziaWGv2 interface",
 		PublicKey:   peer.PublicKey,
+		Jc:          server.Jc,
+		Jmin:        server.Jmin,
+		Jmax:        server.Jmax,
+		I1:          server.I1,
+		I2:          server.I2,
+		I3:          server.I3,
+		I4:          server.I4,
+		I5:          server.I5,
 		AllowedIPs:  strings.Join(peer.AllowedIPs, ", "),
 		Upload:      int64(peer.TransferTx),
 		Download:    int64(peer.TransferRx),

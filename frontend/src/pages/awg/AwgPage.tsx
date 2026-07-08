@@ -27,10 +27,17 @@ interface AwgFormValues {
   jmax: number;
   s1: number;
   s2: number;
+  s3: number;
+  s4: number;
   h1: number;
   h2: number;
   h3: number;
   h4: number;
+  i1: string;
+  i2: string;
+  i3: string;
+  i4: string;
+  i5: string;
   postUp: string;
   postDown: string;
   trafficReset: string;
@@ -45,6 +52,14 @@ interface AwgClientRow {
   comment: string;
   publicKey: string;
   privateKey: string;
+  jc: number;
+  jmin: number;
+  jmax: number;
+  i1: string;
+  i2: string;
+  i3: string;
+  i4: string;
+  i5: string;
   allowedIPs: string;
   upload: number;
   download: number;
@@ -66,14 +81,21 @@ const defaultForm: AwgFormValues = {
   dns: '1.1.1.1,2606:4700:4700::1111',
   mtu: 1420,
   jc: 4,
-  jmin: 50,
-  jmax: 1000,
-  s1: 0,
-  s2: 0,
-  h1: 1,
-  h2: 2,
-  h3: 3,
-  h4: 4,
+  jmin: 64,
+  jmax: 256,
+  s1: 15,
+  s2: 25,
+  s3: 35,
+  s4: 15,
+  h1: 5,
+  h2: 10,
+  h3: 15,
+  h4: 20,
+  i1: '',
+  i2: '',
+  i3: '',
+  i4: '',
+  i5: '',
   postUp: '',
   postDown: '',
   trafficReset: 'never',
@@ -362,10 +384,20 @@ export default function AwgPage() {
                       </Row>
 
                       <Row gutter={12}>
-                        {(['jc', 'jmin', 'jmax', 's1', 's2', 'h1', 'h2', 'h3', 'h4'] as const).map((key) => (
+                        {(['jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4', 'h1', 'h2', 'h3', 'h4'] as const).map((key) => (
                           <Col xs={12} md={8} lg={4} key={key}>
                             <Form.Item name={key} label={key.toUpperCase()}>
                               <InputNumber min={0} style={{ width: '100%' }} />
+                            </Form.Item>
+                          </Col>
+                        ))}
+                      </Row>
+
+                      <Row gutter={16}>
+                        {(['i1', 'i2', 'i3', 'i4', 'i5'] as const).map((key) => (
+                          <Col xs={24} md={12} lg={8} key={key}>
+                            <Form.Item name={key} label={key.toUpperCase()}>
+                              <Input />
                             </Form.Item>
                           </Col>
                         ))}

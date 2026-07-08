@@ -82,7 +82,7 @@ func GenerateServerConfig(server *model.AwgServer, clients []model.AwgClient) st
 	if server.MTU > 0 {
 		b.WriteString(fmt.Sprintf("MTU = %d\n", server.MTU))
 	}
-	writeAwgObfuscation(&b, server)
+	writeAwgServerObfuscation(&b, server)
 	postUp := strings.TrimSpace(server.PostUp)
 	if postUp == "" {
 		postUp = GenerateDefaultPostUp(server, clients)
@@ -129,7 +129,7 @@ func GenerateClientConfig(server *model.AwgServer, client *model.AwgClient) stri
 	if server.MTU > 0 {
 		b.WriteString(fmt.Sprintf("MTU = %d\n", server.MTU))
 	}
-	writeAwgObfuscation(&b, server)
+	writeAwgClientObfuscation(&b, server, client)
 	b.WriteString("\n[Peer]\n")
 	b.WriteString("PublicKey = " + server.PublicKey + "\n")
 	if strings.TrimSpace(client.PresharedKey) != "" {
@@ -153,16 +153,54 @@ func GenerateClientConfig(server *model.AwgServer, client *model.AwgClient) stri
 	return b.String()
 }
 
-func writeAwgObfuscation(b *strings.Builder, server *model.AwgServer) {
+func writeAwgServerObfuscation(b *strings.Builder, server *model.AwgServer) {
 	b.WriteString(fmt.Sprintf("Jc = %d\n", nonZero(server.Jc, 4)))
-	b.WriteString(fmt.Sprintf("Jmin = %d\n", nonZero(server.Jmin, 50)))
-	b.WriteString(fmt.Sprintf("Jmax = %d\n", nonZero(server.Jmax, 1000)))
-	b.WriteString(fmt.Sprintf("S1 = %d\n", server.S1))
-	b.WriteString(fmt.Sprintf("S2 = %d\n", server.S2))
-	b.WriteString(fmt.Sprintf("H1 = %d\n", nonZero(server.H1, 1)))
-	b.WriteString(fmt.Sprintf("H2 = %d\n", nonZero(server.H2, 2)))
-	b.WriteString(fmt.Sprintf("H3 = %d\n", nonZero(server.H3, 3)))
-	b.WriteString(fmt.Sprintf("H4 = %d\n", nonZero(server.H4, 4)))
+	b.WriteString(fmt.Sprintf("Jmin = %d\n", nonZero(server.Jmin, 64)))
+	b.WriteString(fmt.Sprintf("Jmax = %d\n", nonZero(server.Jmax, 256)))
+	writeAwgSharedV2Obfuscation(b, server)
+	writeAwgIValues(b, server.I1, server.I2, server.I3, server.I4, server.I5)
+}
+
+func writeAwgClientObfuscation(b *strings.Builder, server *model.AwgServer, client *model.AwgClient) {
+	b.WriteString(fmt.Sprintf("Jc = %d\n", nonZero(client.Jc, nonZero(server.Jc, 4))))
+	b.WriteString(fmt.Sprintf("Jmin = %d\n", nonZero(client.Jmin, nonZero(server.Jmin, 64))))
+	b.WriteString(fmt.Sprintf("Jmax = %d\n", nonZero(client.Jmax, nonZero(server.Jmax, 256))))
+	writeAwgSharedV2Obfuscation(b, server)
+	writeAwgIValues(
+		b,
+		nonEmpty(client.I1, server.I1),
+		nonEmpty(client.I2, server.I2),
+		nonEmpty(client.I3, server.I3),
+		nonEmpty(client.I4, server.I4),
+		nonEmpty(client.I5, server.I5),
+	)
+}
+
+func writeAwgSharedV2Obfuscation(b *strings.Builder, server *model.AwgServer) {
+	b.WriteString(fmt.Sprintf("S1 = %d\n", nonZero(server.S1, 15)))
+	b.WriteString(fmt.Sprintf("S2 = %d\n", nonZero(server.S2, 25)))
+	b.WriteString(fmt.Sprintf("S3 = %d\n", nonZero(server.S3, 35)))
+	b.WriteString(fmt.Sprintf("S4 = %d\n", nonZero(server.S4, 15)))
+	b.WriteString(fmt.Sprintf("H1 = %d\n", nonZero(server.H1, 5)))
+	b.WriteString(fmt.Sprintf("H2 = %d\n", nonZero(server.H2, 10)))
+	b.WriteString(fmt.Sprintf("H3 = %d\n", nonZero(server.H3, 15)))
+	b.WriteString(fmt.Sprintf("H4 = %d\n", nonZero(server.H4, 20)))
+}
+
+func writeAwgIValues(b *strings.Builder, values ...string) {
+	for idx, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			b.WriteString(fmt.Sprintf("I%d = %s\n", idx+1, value))
+		}
+	}
+}
+
+func nonEmpty(value string, fallback string) string {
+	if strings.TrimSpace(value) != "" {
+		return value
+	}
+	return fallback
 }
 
 func nonZero(value int, fallback int) int {

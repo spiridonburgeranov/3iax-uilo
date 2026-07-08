@@ -15,14 +15,21 @@ type AwgServer struct {
 	IPv6Pool               string `json:"ipv6Pool"`
 	IPv6Gateway            string `json:"ipv6Gateway"`
 	Jc                     int    `json:"jc" gorm:"default:4"`
-	Jmin                   int    `json:"jmin" gorm:"default:50"`
-	Jmax                   int    `json:"jmax" gorm:"default:1000"`
-	S1                     int    `json:"s1" gorm:"default:0"`
-	S2                     int    `json:"s2" gorm:"default:0"`
-	H1                     int    `json:"h1" gorm:"default:1"`
-	H2                     int    `json:"h2" gorm:"default:2"`
-	H3                     int    `json:"h3" gorm:"default:3"`
-	H4                     int    `json:"h4" gorm:"default:4"`
+	Jmin                   int    `json:"jmin" gorm:"default:64"`
+	Jmax                   int    `json:"jmax" gorm:"default:256"`
+	S1                     int    `json:"s1" gorm:"default:15"`
+	S2                     int    `json:"s2" gorm:"default:25"`
+	S3                     int    `json:"s3" gorm:"default:35"`
+	S4                     int    `json:"s4" gorm:"default:15"`
+	H1                     int    `json:"h1" gorm:"default:5"`
+	H2                     int    `json:"h2" gorm:"default:10"`
+	H3                     int    `json:"h3" gorm:"default:15"`
+	H4                     int    `json:"h4" gorm:"default:20"`
+	I1                     string `json:"i1"`
+	I2                     string `json:"i2"`
+	I3                     string `json:"i3"`
+	I4                     string `json:"i4"`
+	I5                     string `json:"i5"`
 	DNS                    string `json:"dns" gorm:"default:'1.1.1.1,2606:4700:4700::1111'"`
 	ExternalInterface      string `json:"externalInterface"`
 	IPv6ExternalInterface  string `json:"ipv6ExternalInterface"`
@@ -45,6 +52,14 @@ type AwgClient struct {
 	PrivateKey          string `json:"privateKey"`
 	PublicKey           string `json:"publicKey"`
 	PresharedKey        string `json:"presharedKey"`
+	Jc                  int    `json:"jc" gorm:"default:4"`
+	Jmin                int    `json:"jmin" gorm:"default:64"`
+	Jmax                int    `json:"jmax" gorm:"default:256"`
+	I1                  string `json:"i1"`
+	I2                  string `json:"i2"`
+	I3                  string `json:"i3"`
+	I4                  string `json:"i4"`
+	I5                  string `json:"i5"`
 	IPv4Address         string `json:"ipv4Address"`
 	IPv6Address         string `json:"ipv6Address"`
 	AllowedIPs          string `json:"allowedIPs"`
