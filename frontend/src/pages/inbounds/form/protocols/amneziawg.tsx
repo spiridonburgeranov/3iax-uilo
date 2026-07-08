@@ -35,12 +35,13 @@ interface AwgProvisionResult {
 interface AmneziawgFieldsProps {
   wgPubKey: string;
   regenInboundWg: () => void;
-  mode: 'create' | 'edit';
+  mode: 'add' | 'edit';
 }
 
 export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: AmneziawgFieldsProps) {
   const { t } = useTranslation();
   const form = Form.useFormInstance();
+  const isCreate = mode === 'add';
   const [messageApi, messageContextHolder] = message.useMessage();
   const [discovered, setDiscovered] = useState<AwgDiscovered[]>([]);
   const [loading, setLoading] = useState(false);
@@ -89,13 +90,13 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
   }, [applyProvision, messageApi]);
 
   useEffect(() => {
-    if (mode !== 'create') return;
-    void loadProvision(false);
+    if (!isCreate) return;
+    void loadProvision(true);
     void HttpUtil.get('/panel/api/awg/discovered', undefined, { silent: true })
       .then((msg) => {
         setDiscovered(Array.isArray(msg?.obj) ? msg.obj as AwgDiscovered[] : []);
       });
-  }, [loadProvision, mode]);
+  }, [isCreate, loadProvision]);
 
   async function applyTemplate(name: string) {
     setLoading(true);
@@ -133,7 +134,7 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
   return (
     <>
       {messageContextHolder}
-      {mode === 'create' && (
+      {isCreate && (
         <Alert
           type="info"
           showIcon
@@ -149,7 +150,7 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
         />
       )}
 
-      {mode === 'create' && provision && (
+      {isCreate && provision && (
         <Descriptions
           bordered
           size="small"
@@ -173,7 +174,7 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
         </Descriptions>
       )}
 
-      {mode === 'create' && (
+      {isCreate && (
         <Space style={{ marginBottom: 16 }}>
           <Button loading={loading} icon={<ReloadOutlined />} onClick={() => void loadProvision(true)}>
             Regenerate plan
@@ -182,7 +183,7 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
       )}
 
       <Collapse
-        defaultActiveKey={mode === 'create' ? ['runtime', 'obfuscation'] : ['runtime']}
+        defaultActiveKey={isCreate ? ['runtime', 'obfuscation'] : ['runtime']}
         items={[
           {
             key: 'runtime',
@@ -208,9 +209,9 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
                   label="Kernel interface"
                   extra="Sequential names awg0, awg1, awg2 — assigned automatically on create"
                 >
-                  <Input placeholder="awg0" disabled={mode === 'create'} />
+                  <Input placeholder="awg0" disabled={isCreate} />
                 </Form.Item>
-                <Form.Item name="port" label="Listen port (UDP)" hidden={mode === 'create'}>
+                <Form.Item name="port" label="Listen port (UDP)" hidden={isCreate}>
                   <InputNumber min={1} max={65535} style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item name={['settings', 'mtu']} label="MTU">
@@ -324,7 +325,7 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
               </>
             ),
           },
-          ...(mode === 'create' && pendingAdopt.length > 0 ? [{
+          ...(isCreate && pendingAdopt.length > 0 ? [{
             key: 'adopt',
             label: 'Adopt existing Amnezia interface',
             children: (

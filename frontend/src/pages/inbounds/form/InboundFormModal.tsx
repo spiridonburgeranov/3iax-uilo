@@ -23,6 +23,7 @@ import {
   formValuesToWirePayload,
 } from '@/lib/xray/inbound-form-adapter';
 import { createDefaultInboundSettings } from '@/lib/xray/inbound-defaults';
+import { buildLocalAwgProvision } from '@/lib/awg/provision';
 import { composeInboundTag, isAutoInboundTag, type InboundTagInput } from '@/lib/xray/inbound-tag';
 import {
   canEnableReality,
@@ -411,6 +412,18 @@ export default function InboundFormModal({
     if (mode === 'edit') return;
     if ('protocol' in changed && typeof changed.protocol === 'string') {
       const next = changed.protocol;
+      if (next === Protocols.AMNEZIAWG) {
+        const plan = buildLocalAwgProvision();
+        form.setFieldsValue({
+          remark: plan.remark,
+          port: plan.port,
+          enable: plan.enable,
+          tag: plan.tag,
+          settings: plan.settings,
+          streamSettings: { security: 'none' },
+        });
+        return;
+      }
       const settings = createDefaultInboundSettings(next) ?? undefined;
       form.setFieldValue('settings', settings);
       if (!NODE_ELIGIBLE_PROTOCOLS.has(next)) {
@@ -440,7 +453,7 @@ export default function InboundFormModal({
             }],
           },
         });
-      } else if (next === Protocols.WIREGUARD || next === Protocols.AMNEZIAWG || next === Protocols.TUNNEL) {
+      } else if (next === Protocols.WIREGUARD || next === Protocols.TUNNEL) {
         // Wireguard and Tunnel (dokodemo-door) have no user-selectable
         // transport: wireguard is always a UDP listener, and tunnel only needs
         // `sockopt.tproxy` for its TProxy/redirect mode. Drop the leftover

@@ -325,9 +325,6 @@ func buildConfig(inbound *model.Inbound) (string, error) {
 	if parsed.MTU > 0 {
 		lines = append(lines, fmt.Sprintf("MTU = %d", parsed.MTU))
 	}
-	if strings.TrimSpace(parsed.DNS) != "" {
-		lines = append(lines, "DNS = "+strings.TrimSpace(parsed.DNS))
-	}
 	appendObfuscationLines(&lines, &parsed)
 	if postUp := buildPostUp(inbound, &parsed, serverAddr); postUp != "" {
 		lines = append(lines, "PostUp = "+postUp)

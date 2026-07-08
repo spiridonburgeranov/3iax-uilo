@@ -1,4 +1,6 @@
 import { RandomUtil, Wireguard } from '@/utils';
+import { buildLocalAwgProvision } from '@/lib/awg/provision';
+import { AmneziawgInboundSettingsSchema } from '@/schemas/protocols/inbound/amneziawg';
 
 import type { HttpInboundSettings } from '@/schemas/protocols/inbound/http';
 import type { HysteriaClient, HysteriaInboundSettings } from '@/schemas/protocols/inbound/hysteria';
@@ -278,19 +280,13 @@ export function createDefaultWireguardInboundSettings(
 export function createDefaultAmneziawgInboundSettings(
   seed: WireguardInboundSeed = {},
 ): AmneziawgInboundSettings {
-  return {
-    mtu: seed.mtu ?? 1420,
-    secretKey: seed.secretKey ?? Wireguard.generateKeypair().privateKey,
-    address: '',
-    awgInterface: '',
-    externalInterface: '',
-    postUp: '',
-    postDown: '',
-    dns: '1.1.1.1,2606:4700:4700::1111',
-    peers: [],
-    clients: [],
+  const provision = buildLocalAwgProvision();
+  return AmneziawgInboundSettingsSchema.parse({
+    ...provision.settings,
+    mtu: seed.mtu ?? provision.settings.mtu,
+    secretKey: seed.secretKey ?? provision.settings.secretKey,
     noKernelTun: seed.noKernelTun ?? false,
-  };
+  });
 }
 
 // Protocol-aware dispatch over every inbound-settings factory. Mirrors
