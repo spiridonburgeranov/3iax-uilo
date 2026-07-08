@@ -67,22 +67,22 @@ export default function AmneziawgFields(props: AmneziawgFieldsProps) {
       <Row gutter={12}>
         <Col xs={24} md={6}>
           <Form.Item name={['settings', 'h1']} label="H1">
-            <InputNumber min={0} style={{ width: '100%' }} />
+            <Input />
           </Form.Item>
         </Col>
         <Col xs={24} md={6}>
           <Form.Item name={['settings', 'h2']} label="H2">
-            <InputNumber min={0} style={{ width: '100%' }} />
+            <Input />
           </Form.Item>
         </Col>
         <Col xs={24} md={6}>
           <Form.Item name={['settings', 'h3']} label="H3">
-            <InputNumber min={0} style={{ width: '100%' }} />
+            <Input />
           </Form.Item>
         </Col>
         <Col xs={24} md={6}>
           <Form.Item name={['settings', 'h4']} label="H4">
-            <InputNumber min={0} style={{ width: '100%' }} />
+            <Input />
           </Form.Item>
         </Col>
       </Row>

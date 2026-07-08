@@ -40,10 +40,12 @@ type inboundSettings struct {
 	Jmax              int    `json:"jmax"`
 	S1                int    `json:"s1"`
 	S2                int    `json:"s2"`
-	H1                int    `json:"h1"`
-	H2                int    `json:"h2"`
-	H3                int    `json:"h3"`
-	H4                int    `json:"h4"`
+	S3                int    `json:"s3"`
+	S4                int    `json:"s4"`
+	H1                string `json:"h1"`
+	H2                string `json:"h2"`
+	H3                string `json:"h3"`
+	H4                string `json:"h4"`
 	ExternalInterface string `json:"externalInterface"`
 	PostUp            string `json:"postUp"`
 	PostDown          string `json:"postDown"`
@@ -294,16 +296,18 @@ func buildConfig(inbound *model.Inbound) (string, error) {
 	if strings.TrimSpace(parsed.DNS) != "" {
 		lines = append(lines, "DNS = "+strings.TrimSpace(parsed.DNS))
 	}
-	jc, jmin, jmax, s1, s2, h1, h2, h3, h4 := obfuscationParams(&parsed)
+	jc, jmin, jmax, s1, s2, s3, s4, h1, h2, h3, h4 := obfuscationParams(&parsed)
 	lines = append(lines, fmt.Sprintf("Jc = %d", jc))
 	lines = append(lines, fmt.Sprintf("Jmin = %d", jmin))
 	lines = append(lines, fmt.Sprintf("Jmax = %d", jmax))
 	lines = append(lines, fmt.Sprintf("S1 = %d", s1))
 	lines = append(lines, fmt.Sprintf("S2 = %d", s2))
-	lines = append(lines, fmt.Sprintf("H1 = %d", h1))
-	lines = append(lines, fmt.Sprintf("H2 = %d", h2))
-	lines = append(lines, fmt.Sprintf("H3 = %d", h3))
-	lines = append(lines, fmt.Sprintf("H4 = %d", h4))
+	lines = append(lines, fmt.Sprintf("S3 = %d", s3))
+	lines = append(lines, fmt.Sprintf("S4 = %d", s4))
+	lines = append(lines, "H1 = "+h1)
+	lines = append(lines, "H2 = "+h2)
+	lines = append(lines, "H3 = "+h3)
+	lines = append(lines, "H4 = "+h4)
 	if postUp := buildPostUp(inbound, &parsed, serverAddr); postUp != "" {
 		lines = append(lines, "PostUp = "+postUp)
 	}
@@ -331,36 +335,36 @@ func buildConfig(inbound *model.Inbound) (string, error) {
 	return strings.Join(lines, "\n") + "\n", nil
 }
 
-func obfuscationParams(parsed *inboundSettings) (int, int, int, int, int, int, int, int, int) {
+func obfuscationParams(parsed *inboundSettings) (int, int, int, int, int, int, int, string, string, string, string) {
 	jc := parsed.Jc
 	if jc <= 0 {
 		jc = 4
 	}
 	jmin := parsed.Jmin
 	if jmin <= 0 {
-		jmin = 50
+		jmin = 64
 	}
 	jmax := parsed.Jmax
 	if jmax <= 0 {
-		jmax = 1000
+		jmax = 256
 	}
-	h1 := parsed.H1
-	if h1 <= 0 {
-		h1 = 1
+	s1 := parsed.S1
+	if s1 <= 0 {
+		s1 = 15
 	}
-	h2 := parsed.H2
-	if h2 <= 0 {
-		h2 = 2
+	s2 := parsed.S2
+	if s2 <= 0 {
+		s2 = 25
 	}
-	h3 := parsed.H3
-	if h3 <= 0 {
-		h3 = 3
+	s3 := parsed.S3
+	if s3 <= 0 {
+		s3 = 35
 	}
-	h4 := parsed.H4
-	if h4 <= 0 {
-		h4 = 4
+	s4 := parsed.S4
+	if s4 <= 0 {
+		s4 = 15
 	}
-	return jc, jmin, jmax, parsed.S1, parsed.S2, h1, h2, h3, h4
+	return jc, jmin, jmax, s1, s2, s3, s4, nonEmpty(parsed.H1, "1"), nonEmpty(parsed.H2, "2"), nonEmpty(parsed.H3, "3"), nonEmpty(parsed.H4, "4")
 }
 
 func buildPostUp(inbound *model.Inbound, parsed *inboundSettings, serverAddr string) string {
@@ -631,6 +635,7 @@ func splitAllowedIPs(value string) []string {
 
 func up(configPath string) error {
 	cmd := exec.Command("awg-quick", "up", configPath)
+	withAwgGoEnv(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("awg-quick up failed: %s: %w", strings.TrimSpace(string(out)), err)
@@ -640,6 +645,7 @@ func up(configPath string) error {
 
 func down(configPath string) error {
 	cmd := exec.Command("awg-quick", "down", configPath)
+	withAwgGoEnv(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("awg-quick down failed: %s: %w", strings.TrimSpace(string(out)), err)
@@ -649,6 +655,7 @@ func down(configPath string) error {
 
 func sync(interfaceName, configPath string) error {
 	stripCmd := exec.Command("awg-quick", "strip", configPath)
+	withAwgGoEnv(stripCmd)
 	stripped, err := stripCmd.Output()
 	if err != nil {
 		return up(configPath)
@@ -660,4 +667,10 @@ func sync(interfaceName, configPath string) error {
 		return fmt.Errorf("awg syncconf failed: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	return nil
+}
+
+func withAwgGoEnv(cmd *exec.Cmd) {
+	if _, err := exec.LookPath("amneziawg-go"); err == nil {
+		cmd.Env = append(os.Environ(), "WG_QUICK_USERSPACE_IMPLEMENTATION=amneziawg-go")
+	}
 }

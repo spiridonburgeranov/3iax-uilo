@@ -158,7 +158,6 @@ func writeAwgServerObfuscation(b *strings.Builder, server *model.AwgServer) {
 	b.WriteString(fmt.Sprintf("Jmin = %d\n", nonZero(server.Jmin, 64)))
 	b.WriteString(fmt.Sprintf("Jmax = %d\n", nonZero(server.Jmax, 256)))
 	writeAwgSharedV2Obfuscation(b, server)
-	writeAwgIValues(b, server.I1, server.I2, server.I3, server.I4, server.I5)
 }
 
 func writeAwgClientObfuscation(b *strings.Builder, server *model.AwgServer, client *model.AwgClient) {
@@ -181,10 +180,10 @@ func writeAwgSharedV2Obfuscation(b *strings.Builder, server *model.AwgServer) {
 	b.WriteString(fmt.Sprintf("S2 = %d\n", nonZero(server.S2, 25)))
 	b.WriteString(fmt.Sprintf("S3 = %d\n", nonZero(server.S3, 35)))
 	b.WriteString(fmt.Sprintf("S4 = %d\n", nonZero(server.S4, 15)))
-	b.WriteString(fmt.Sprintf("H1 = %d\n", nonZero(server.H1, 5)))
-	b.WriteString(fmt.Sprintf("H2 = %d\n", nonZero(server.H2, 10)))
-	b.WriteString(fmt.Sprintf("H3 = %d\n", nonZero(server.H3, 15)))
-	b.WriteString(fmt.Sprintf("H4 = %d\n", nonZero(server.H4, 20)))
+	b.WriteString("H1 = " + nonEmpty(server.H1, "1") + "\n")
+	b.WriteString("H2 = " + nonEmpty(server.H2, "2") + "\n")
+	b.WriteString("H3 = " + nonEmpty(server.H3, "3") + "\n")
+	b.WriteString("H4 = " + nonEmpty(server.H4, "4") + "\n")
 }
 
 func writeAwgIValues(b *strings.Builder, values ...string) {

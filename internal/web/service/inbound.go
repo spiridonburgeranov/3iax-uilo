@@ -310,10 +310,10 @@ type InboundOption struct {
 	AwgS2          int    `json:"awgS2,omitempty"`
 	AwgS3          int    `json:"awgS3,omitempty"`
 	AwgS4          int    `json:"awgS4,omitempty"`
-	AwgH1          int    `json:"awgH1,omitempty"`
-	AwgH2          int    `json:"awgH2,omitempty"`
-	AwgH3          int    `json:"awgH3,omitempty"`
-	AwgH4          int    `json:"awgH4,omitempty"`
+	AwgH1          string `json:"awgH1,omitempty"`
+	AwgH2          string `json:"awgH2,omitempty"`
+	AwgH3          string `json:"awgH3,omitempty"`
+	AwgH4          string `json:"awgH4,omitempty"`
 	AwgI1          string `json:"awgI1,omitempty"`
 	AwgI2          string `json:"awgI2,omitempty"`
 	AwgI3          string `json:"awgI3,omitempty"`
@@ -418,10 +418,10 @@ type inboundWireguardHint struct {
 	S2        int
 	S3        int
 	S4        int
-	H1        int
-	H2        int
-	H3        int
-	H4        int
+	H1        string
+	H2        string
+	H3        string
+	H4        string
 	I1        string
 	I2        string
 	I3        string
@@ -446,10 +446,10 @@ func inboundWireguardHints(protocol string, settings string) inboundWireguardHin
 		S2        int    `json:"s2"`
 		S3        int    `json:"s3"`
 		S4        int    `json:"s4"`
-		H1        int    `json:"h1"`
-		H2        int    `json:"h2"`
-		H3        int    `json:"h3"`
-		H4        int    `json:"h4"`
+		H1        string `json:"h1"`
+		H2        string `json:"h2"`
+		H3        string `json:"h3"`
+		H4        string `json:"h4"`
 		I1        string `json:"i1"`
 		I2        string `json:"i2"`
 		I3        string `json:"i3"`

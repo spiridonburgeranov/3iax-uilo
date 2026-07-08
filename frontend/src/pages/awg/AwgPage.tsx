@@ -29,10 +29,10 @@ interface AwgFormValues {
   s2: number;
   s3: number;
   s4: number;
-  h1: number;
-  h2: number;
-  h3: number;
-  h4: number;
+  h1: string;
+  h2: string;
+  h3: string;
+  h4: string;
   i1: string;
   i2: string;
   i3: string;
@@ -108,10 +108,10 @@ const defaultForm: AwgFormValues = {
   s2: 25,
   s3: 35,
   s4: 15,
-  h1: 5,
-  h2: 10,
-  h3: 15,
-  h4: 20,
+  h1: '1',
+  h2: '2',
+  h3: '3',
+  h4: '4',
   i1: '',
   i2: '',
   i3: '',
@@ -505,10 +505,20 @@ export default function AwgPage() {
                       </Row>
 
                       <Row gutter={12}>
-                        {(['jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4', 'h1', 'h2', 'h3', 'h4'] as const).map((key) => (
+                        {(['jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4'] as const).map((key) => (
                           <Col xs={12} md={8} lg={4} key={key}>
                             <Form.Item name={key} label={key.toUpperCase()}>
                               <InputNumber min={0} style={{ width: '100%' }} />
+                            </Form.Item>
+                          </Col>
+                        ))}
+                      </Row>
+
+                      <Row gutter={16}>
+                        {(['h1', 'h2', 'h3', 'h4'] as const).map((key) => (
+                          <Col xs={24} md={12} lg={6} key={key}>
+                            <Form.Item name={key} label={key.toUpperCase()}>
+                              <Input />
                             </Form.Item>
                           </Col>
                         ))}

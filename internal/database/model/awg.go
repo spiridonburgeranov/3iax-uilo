@@ -21,10 +21,10 @@ type AwgServer struct {
 	S2                     int    `json:"s2" gorm:"default:25"`
 	S3                     int    `json:"s3" gorm:"default:35"`
 	S4                     int    `json:"s4" gorm:"default:15"`
-	H1                     int    `json:"h1" gorm:"default:5"`
-	H2                     int    `json:"h2" gorm:"default:10"`
-	H3                     int    `json:"h3" gorm:"default:15"`
-	H4                     int    `json:"h4" gorm:"default:20"`
+	H1                     string `json:"h1" gorm:"default:'1'"`
+	H2                     string `json:"h2" gorm:"default:'2'"`
+	H3                     string `json:"h3" gorm:"default:'3'"`
+	H4                     string `json:"h4" gorm:"default:'4'"`
 	I1                     string `json:"i1"`
 	I2                     string `json:"i2"`
 	I3                     string `json:"i3"`

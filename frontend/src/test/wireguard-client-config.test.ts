@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  buildAmneziaClientConfig,
   buildWireguardClientConfig,
+  buildClientTunnelConfig,
   clientTunnelConfigLabel,
   findTunnelInbounds,
   findWireguardInbound,
@@ -107,10 +107,10 @@ describe('buildWireguardClientConfig', () => {
         awgJmax: 1000,
         awgS1: 0,
         awgS2: 0,
-        awgH1: 1,
-        awgH2: 2,
-        awgH3: 3,
-        awgH4: 4,
+        awgH1: '1',
+        awgH2: '2',
+        awgH3: '3',
+        awgH4: '4',
       },
       'awg.example.com',
       '',
@@ -120,25 +120,9 @@ describe('buildWireguardClientConfig', () => {
     expect(cfg).toContain('DNS = 1.1.1.1, 1.0.0.1');
   });
 
-  it('emits an AmneziaWG app config from the dedicated Amnezia generator', () => {
-    const cfg = buildAmneziaClientConfig(
-      { ...client, keepAlive: undefined },
-      {
-        ...inbound,
-        protocol: 'amneziawg',
-        wgDns: undefined,
-        awgS1: 0,
-        awgS2: 0,
-      },
-      'awg.example.com',
-      '',
-    );
-    expect(cfg).toContain('DNS = 1.1.1.1,2606:4700:4700::1111');
-    expect(cfg).toContain('Jc = 4');
-    expect(cfg).toContain('S1 = 0');
-    expect(cfg.indexOf('PresharedKey =')).toBeLessThan(cfg.indexOf('Endpoint = awg.example.com:51820'));
-    expect(cfg.indexOf('Endpoint = awg.example.com:51820')).toBeLessThan(cfg.indexOf('AllowedIPs = 0.0.0.0/0, ::/0'));
-    expect(cfg).toContain('PersistentKeepalive = 25');
+  it('does not build AmneziaWG configs through the WireGuard helper', () => {
+    const cfg = buildClientTunnelConfig(client, { ...inbound, protocol: 'amneziawg' }, 'awg.example.com', '');
+    expect(cfg).toBe('');
   });
 
   it('labels AmneziaWG configs separately from WireGuard', () => {

@@ -89,20 +89,20 @@ func (s *AwgService) GetServer() (*model.AwgServer, error) {
 		server.S4 = 15
 		changed = true
 	}
-	if server.H1 <= 0 {
-		server.H1 = 5
+	if strings.TrimSpace(server.H1) == "" {
+		server.H1 = "1"
 		changed = true
 	}
-	if server.H2 <= 0 {
-		server.H2 = 10
+	if strings.TrimSpace(server.H2) == "" {
+		server.H2 = "2"
 		changed = true
 	}
-	if server.H3 <= 0 {
-		server.H3 = 15
+	if strings.TrimSpace(server.H3) == "" {
+		server.H3 = "3"
 		changed = true
 	}
-	if server.H4 <= 0 {
-		server.H4 = 20
+	if strings.TrimSpace(server.H4) == "" {
+		server.H4 = "4"
 		changed = true
 	}
 	if changed {

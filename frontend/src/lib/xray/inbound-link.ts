@@ -7,7 +7,6 @@ import type {
   WireguardInboundPeer,
   WireguardInboundSettings,
 } from '@/schemas/protocols/inbound/wireguard';
-import type { AmneziawgInboundSettings } from '@/schemas/protocols/inbound/amneziawg';
 import type { ExternalProxyEntry } from '@/schemas/protocols/stream/external-proxy';
 import type { FinalMaskStreamSettings } from '@/schemas/protocols/stream/finalmask';
 import type { XHttpStreamSettings } from '@/schemas/protocols/stream/xhttp';
@@ -870,56 +869,6 @@ export function genWireguardConfig(input: GenWireguardLinkInput): string {
   return txt;
 }
 
-interface GenAmneziawgConfigInput {
-  settings: AmneziawgInboundSettings;
-  address: string;
-  port: number;
-  peerIndex: number;
-}
-
-export function genAmneziawgConfig(input: GenAmneziawgConfigInput): string {
-  const { settings, address, port, peerIndex } = input;
-  const peer = settings.peers[peerIndex];
-  if (!peer) return '';
-
-  const pubKey = settings.secretKey.length > 0
-    ? Wireguard.generateKeypair(settings.secretKey).publicKey
-    : '';
-
-  let txt = `[Interface]\n`;
-  txt += `PrivateKey = ${peer.privateKey ?? ''}\n`;
-  txt += `Address = ${peer.allowedIPs.length > 0 ? peer.allowedIPs.join(', ') : '10.66.66.2/32'}\n`;
-  txt += `DNS = ${settings.dns || '1.1.1.1,2606:4700:4700::1111'}\n`;
-  if (typeof settings.mtu === 'number' && settings.mtu > 0) {
-    txt += `MTU = ${settings.mtu}\n`;
-  }
-  for (const [key, value] of [
-    ['Jc', settings.jc ?? 4],
-    ['Jmin', settings.jmin ?? 50],
-    ['Jmax', settings.jmax ?? 1000],
-    ['S1', settings.s1 ?? 0],
-    ['S2', settings.s2 ?? 0],
-    ['H1', settings.h1 ?? 1],
-    ['H2', settings.h2 ?? 2],
-    ['H3', settings.h3 ?? 3],
-    ['H4', settings.h4 ?? 4],
-  ] as const) {
-    if (typeof value === 'number' && value >= 0) {
-      txt += `${key} = ${value}\n`;
-    }
-  }
-  txt += `\n[Peer]\n`;
-  txt += `PublicKey = ${pubKey}\n`;
-  if (peer.preSharedKey && peer.preSharedKey.length > 0) {
-    txt += `PresharedKey = ${peer.preSharedKey}\n`;
-  }
-  txt += `Endpoint = ${address}:${port}\n`;
-  txt += `AllowedIPs = 0.0.0.0/0, ::/0\n`;
-  const keepAlive = typeof peer.keepAlive === 'number' && peer.keepAlive > 0 ? peer.keepAlive : 25;
-  txt += `PersistentKeepalive = ${keepAlive}\n`;
-  return txt;
-}
-
 export function wireguardConfigFromLink(link: string, fallbackRemark = ''): string {
   let url: URL;
   try {
@@ -1274,7 +1223,7 @@ export function genInboundLinks(input: GenInboundLinksInput): string {
   if (inbound.protocol === 'shadowsocks') {
     return genShadowsocksLink({ inbound, address: addr, port: inbound.port, forceTls: 'same', remark });
   }
-  if (inbound.protocol === 'wireguard' || inbound.protocol === 'amneziawg') {
+  if (inbound.protocol === 'wireguard') {
     return genWireguardConfigs({ inbound, remark, hostOverride, fallbackHostname });
   }
   return '';
@@ -1324,22 +1273,9 @@ export function genWireguardLinks(input: GenWireguardFanoutInput): string {
 
 export function genWireguardConfigs(input: GenWireguardFanoutInput): string {
   const { inbound, remark = '', hostOverride = '', fallbackHostname } = input;
-  if (inbound.protocol !== 'wireguard' && inbound.protocol !== 'amneziawg') return '';
+  if (inbound.protocol !== 'wireguard') return '';
   const addr = resolveAddr(inbound, hostOverride, fallbackHostname);
   const sep = '-';
-  if (inbound.protocol === 'amneziawg') {
-    const baseSettings = inbound.settings as AmneziawgInboundSettings;
-    const peers = wgRenderPeers(baseSettings as WireguardInboundSettings);
-    const settings: AmneziawgInboundSettings = { ...baseSettings, peers };
-    return peers
-      .map((_p, i) => genAmneziawgConfig({
-        settings,
-        address: addr,
-        port: inbound.port,
-        peerIndex: i,
-      }))
-      .join('\r\n');
-  }
   const baseSettings = inbound.settings as WireguardInboundSettings;
   const peers = wgRenderPeers(baseSettings);
   const settings: WireguardInboundSettings = { ...baseSettings, peers };
