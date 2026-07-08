@@ -964,11 +964,21 @@ function normalizeShareHost(host: string): string {
   return SHARE_HOSTNAME_RE.test(h) ? h : '';
 }
 
+function isWireguardInterfaceName(host: string): boolean {
+  const h = host.trim().toLowerCase();
+  if (h === 'awg' || h === 'wg') return true;
+  if (h.startsWith('inbound-awg')) return true;
+  if (/^awg\d*$/.test(h)) return true;
+  if (/^wg\d+$/.test(h)) return true;
+  return false;
+}
+
 function isShareableHost(host: string): boolean {
   const h = normalizeShareHost(host).replace(/^\[|\]$/g, '').toLowerCase();
   if (h.length === 0) return false;
   if (h === '0.0.0.0' || h === '::' || h === '::0') return false;
   if (h === 'localhost' || h === '::1' || h.startsWith('127.')) return false;
+  if (isWireguardInterfaceName(h)) return false;
   return true;
 }
 
@@ -1004,18 +1014,23 @@ export function resolveShareHost(
   fields: ShareHostFields,
   hostOverride: string,
   fallbackHostname: string,
+  serverPublicIPv4 = '',
 ): string {
-  const nodeAddr = normalizeShareHost(hostOverride);
+  const pick = (host: string) => (isShareableHost(host) ? normalizeShareHost(host) : '');
+  const nodeAddr = pick(hostOverride);
   const listenAddr = shareableListenFrom(fields.listen ?? '');
-  const customAddr = normalizeShareHost(fields.shareAddr ?? '');
-  const fallbackAddr = normalizeShareHost(fallbackHostname) || fallbackHostname.trim();
+  const customAddr = pick(fields.shareAddr ?? '');
+  const fallbackAddr = pick(fallbackHostname) || (
+    isWireguardInterfaceName(fallbackHostname) ? '' : fallbackHostname.trim()
+  );
+  const autoIPv4 = pick(serverPublicIPv4);
   switch (normalizeShareAddrStrategy(fields.shareAddrStrategy)) {
     case 'listen':
-      return listenAddr || nodeAddr || fallbackAddr;
+      return listenAddr || nodeAddr || customAddr || fallbackAddr || autoIPv4;
     case 'custom':
-      return customAddr || nodeAddr || listenAddr || fallbackAddr;
+      return customAddr || nodeAddr || listenAddr || fallbackAddr || autoIPv4;
     default:
-      return nodeAddr || listenAddr || fallbackAddr;
+      return nodeAddr || listenAddr || customAddr || fallbackAddr || autoIPv4;
   }
 }
 
@@ -1041,7 +1056,10 @@ function isLoopbackHost(host: string): boolean {
 // localhost. An explicit per-inbound listen or node override still wins, since
 // resolveAddr only reaches the fallbackHostname after those.
 export function preferPublicHost(browserHost: string, publicHost: string): string {
-  return publicHost && isLoopbackHost(browserHost) ? publicHost : browserHost;
+  const trimmedPublic = publicHost.trim();
+  if (!trimmedPublic) return browserHost;
+  if (isLoopbackHost(browserHost) || isWireguardInterfaceName(browserHost)) return trimmedPublic;
+  return browserHost;
 }
 
 // Returns the client array for protocols that have one. SS returns its

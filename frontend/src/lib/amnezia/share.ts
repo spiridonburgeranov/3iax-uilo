@@ -43,7 +43,11 @@ export async function fetchClientVpnUri(
   const path = inbound.protocol === 'amneziawg'
     ? `/panel/api/awg/client/${inbound.id}/${encodeURIComponent(client.email)}/vpnuri`
     : `/panel/api/clients/inbound/${inbound.id}/${encodeURIComponent(client.email)}/vpnuri`;
-  const msg = await HttpUtil.get<string>(path, { endpoint }, { silent: true });
+  const msg = await HttpUtil.get<string>(
+    path,
+    inbound.protocol === 'amneziawg' ? undefined : { endpoint },
+    { silent: true },
+  );
   if (msg.success && typeof msg.obj === 'string' && msg.obj.trim()) {
     return msg.obj;
   }
@@ -61,7 +65,11 @@ export async function fetchClientVpnFile(
   const path = inbound.protocol === 'amneziawg'
     ? `/panel/api/awg/client/${inbound.id}/${encodeURIComponent(client.email)}/vpnfile`
     : `/panel/api/clients/inbound/${inbound.id}/${encodeURIComponent(client.email)}/vpnfile`;
-  const msg = await HttpUtil.get<string>(path, { endpoint }, { silent: true });
+  const msg = await HttpUtil.get<string>(
+    path,
+    inbound.protocol === 'amneziawg' ? undefined : { endpoint },
+    { silent: true },
+  );
   if (msg.success && typeof msg.obj === 'string' && msg.obj.trim()) {
     return msg.obj;
   }

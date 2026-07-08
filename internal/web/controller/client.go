@@ -565,6 +565,7 @@ func (a *ClientController) clientVpnURI(c *gin.Context) {
 		return
 	}
 	endpoint := strings.TrimSpace(c.Query("endpoint"))
+	endpoint = a.inboundService.ResolveShareEndpoint(inbound, resolveHost(c), endpoint)
 	uri, err := a.inboundService.ClientVpnURI(a.settingService, resolveHost(c), endpoint, inbound, client)
 	jsonObj(c, uri, err)
 }
@@ -598,6 +599,7 @@ func (a *ClientController) clientVpnFile(c *gin.Context) {
 		return
 	}
 	endpoint := strings.TrimSpace(c.Query("endpoint"))
+	endpoint = a.inboundService.ResolveShareEndpoint(inbound, resolveHost(c), endpoint)
 	vpnFile, err := a.inboundService.ClientVpnFile(a.settingService, resolveHost(c), endpoint, inbound, client)
 	jsonObj(c, vpnFile, err)
 }

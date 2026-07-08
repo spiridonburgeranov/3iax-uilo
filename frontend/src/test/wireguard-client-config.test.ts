@@ -146,6 +146,22 @@ describe('buildWireguardClientConfig', () => {
     expect(cfg).toContain('Endpoint = awg.example.com:51820');
   });
 
+  it('does not use awg interface names as endpoint host', () => {
+    const cfg = buildClientTunnelConfig(
+      client,
+      {
+        ...inbound,
+        protocol: 'amneziawg',
+        listen: 'awg1',
+        shareAddrStrategy: 'listen',
+      },
+      'awg',
+      'vpn.example.com',
+    );
+    expect(cfg).toContain('Endpoint = vpn.example.com:51820');
+    expect(cfg).not.toMatch(/Endpoint = awg:/);
+  });
+
   it('labels AmneziaWG configs separately from WireGuard', () => {
     expect(clientTunnelConfigLabel({ ...inbound, protocol: 'amneziawg' })).toBe('AmneziaWG config');
     expect(clientTunnelConfigLabel(inbound)).toBe('WireGuard config');

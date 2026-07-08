@@ -130,11 +130,9 @@ export async function fetchAmneziawgClientConfig(
   host = window.location.hostname,
   publicHost = '',
 ): Promise<string> {
-  const endpointHost = resolveShareHost(inbound, inbound.nodeAddress ?? '', preferPublicHost(host, publicHost));
-  const endpoint = `${endpointHost}:${inbound.port || ''}`;
   const msg = await HttpUtil.get<string>(
     `/panel/api/awg/client/${inbound.id}/${encodeURIComponent(client.email)}/config`,
-    { endpoint },
+    undefined,
     { silent: true },
   );
   if (msg.success && typeof msg.obj === 'string' && msg.obj.trim()) {
@@ -149,11 +147,9 @@ export async function fetchAmneziawgVpnUri(
   host = window.location.hostname,
   publicHost = '',
 ): Promise<string> {
-  const endpointHost = resolveShareHost(inbound, inbound.nodeAddress ?? '', preferPublicHost(host, publicHost));
-  const endpoint = `${endpointHost}:${inbound.port || ''}`;
   const msg = await HttpUtil.get<string>(
     `/panel/api/awg/client/${inbound.id}/${encodeURIComponent(client.email)}/vpnuri`,
-    { endpoint },
+    undefined,
     { silent: true },
   );
   if (msg.success && typeof msg.obj === 'string' && msg.obj.trim()) {

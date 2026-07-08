@@ -2,6 +2,7 @@ package controller
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	amneziavpn "github.com/mhsanaei/3x-ui/v3/internal/amnezia/vpnuri"
@@ -137,7 +138,8 @@ func (a *AwgController) clientConfig(c *gin.Context) {
 		jsonMsg(c, "client not found", err)
 		return
 	}
-	endpoint := c.Query("endpoint")
+	endpoint := strings.TrimSpace(c.Query("endpoint"))
+	endpoint = a.inboundService.ResolveShareEndpoint(inbound, resolveHost(c), endpoint)
 	config, err := a.awgInboundService.ClientConfig(inbound, client, endpoint)
 	jsonObj(c, config, err)
 }
@@ -170,7 +172,8 @@ func (a *AwgController) clientVpnURI(c *gin.Context) {
 		jsonMsg(c, "client not found", err)
 		return
 	}
-	endpoint := c.Query("endpoint")
+	endpoint := strings.TrimSpace(c.Query("endpoint"))
+	endpoint = a.inboundService.ResolveShareEndpoint(inbound, resolveHost(c), endpoint)
 	uri, err := a.awgInboundService.ClientVpnURI(inbound, client, endpoint)
 	jsonObj(c, uri, err)
 }
@@ -203,7 +206,8 @@ func (a *AwgController) clientVpnFile(c *gin.Context) {
 		jsonMsg(c, "client not found", err)
 		return
 	}
-	endpoint := c.Query("endpoint")
+	endpoint := strings.TrimSpace(c.Query("endpoint"))
+	endpoint = a.inboundService.ResolveShareEndpoint(inbound, resolveHost(c), endpoint)
 	vpnURI, err := a.awgInboundService.ClientVpnURI(inbound, client, endpoint)
 	if err != nil {
 		jsonObj(c, "", err)
