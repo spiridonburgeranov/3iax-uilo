@@ -2,6 +2,9 @@ name: Release 3X-UI
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
   pull_request:
     paths:
       - "**.go"
@@ -314,8 +317,8 @@ jobs:
   # channel is unaffected.
   publish-dev:
     name: Publish rolling dev release
-    needs: [build, build-windows]
-    if: false
+    needs: [build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -360,4 +363,7 @@ jobs:
               --target "${COMMIT}" --title "Dev build ${short}" --notes "${notes}"
           fi
 
-          gh release upload dev-latest dev-artifacts/*.tar.gz dev-artifacts/*.zip --clobber
+          gh release upload dev-latest dev-artifacts/*.tar.gz --clobber
+          if compgen -G "dev-artifacts/*.zip" > /dev/null; then
+            gh release upload dev-latest dev-artifacts/*.zip --clobber
+          fi
