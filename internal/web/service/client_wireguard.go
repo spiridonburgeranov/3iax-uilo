@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"net/netip"
 	"strconv"
 	"strings"
@@ -11,6 +12,8 @@ import (
 )
 
 const defaultWireguardBase = "10.0.0.0/24"
+const defaultAmneziaWGAddress = "10.66.66.1/24"
+const defaultAmneziaWGBase = "10.66.66.0/24"
 
 func keepAliveStr(seconds int) string {
 	if seconds <= 0 {
@@ -41,6 +44,61 @@ func wireguardAllocationBase(used []string, fallback string) string {
 		}
 		if p, err := a.Prefix(24); err == nil {
 			return p.String()
+		}
+	}
+	return fallback
+}
+
+func wireguardSettingsAddresses(settings string, fallback string) []string {
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(settings), &raw); err != nil {
+		if fallback == "" {
+			return nil
+		}
+		return []string{fallback}
+	}
+	value, ok := raw["address"]
+	if !ok {
+		if fallback == "" {
+			return nil
+		}
+		return []string{fallback}
+	}
+	switch v := value.(type) {
+	case string:
+		parts := strings.Split(v, ",")
+		out := make([]string, 0, len(parts))
+		for _, part := range parts {
+			if trimmed := strings.TrimSpace(part); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				if trimmed := strings.TrimSpace(s); trimmed != "" {
+					out = append(out, trimmed)
+				}
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	if fallback == "" {
+		return nil
+	}
+	return []string{fallback}
+}
+
+func wireguardBaseFromAddresses(addresses []string, fallback string) string {
+	for _, address := range addresses {
+		if p, err := netip.ParsePrefix(strings.TrimSpace(address)); err == nil && p.Addr().Is4() {
+			return p.Masked().String()
 		}
 	}
 	return fallback
@@ -121,11 +179,25 @@ func wireguardAllowedIPsCollision(entries, used []string) string {
 // maps that get persisted into the inbound settings. Existing values are never
 // overwritten, so editing a client never rotates its keys.
 func defaultWireguardClients(existing, clients []model.Client, interfaceClients []any) error {
+	return defaultWireguardClientsWithBase(existing, clients, interfaceClients, defaultWireguardBase, nil)
+}
+
+func defaultTunnelClients(protocol model.Protocol, settings string, existing, clients []model.Client, interfaceClients []any) error {
+	if protocol != model.AmneziaWG {
+		return defaultWireguardClients(existing, clients, interfaceClients)
+	}
+	addresses := wireguardSettingsAddresses(settings, defaultAmneziaWGAddress)
+	base := wireguardBaseFromAddresses(addresses, defaultAmneziaWGBase)
+	return defaultWireguardClientsWithBase(existing, clients, interfaceClients, base, addresses)
+}
+
+func defaultWireguardClientsWithBase(existing, clients []model.Client, interfaceClients []any, fallbackBase string, reserved []string) error {
 	used := make([]string, 0)
+	used = append(used, reserved...)
 	for i := range existing {
 		used = append(used, existing[i].AllowedIPs...)
 	}
-	base := wireguardAllocationBase(used, defaultWireguardBase)
+	base := wireguardAllocationBase(used, fallbackBase)
 	for i := range clients {
 		c := &clients[i]
 		if c.PrivateKey == "" && c.PublicKey == "" {

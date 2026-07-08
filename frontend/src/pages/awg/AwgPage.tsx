@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Col, ConfigProvider, Form, Input, InputNumber, Layout, Row, Space, Spin, Switch, Tag, message } from 'antd';
-import { ReloadOutlined, SaveOutlined } from '@ant-design/icons';
+import { Alert, Badge, Button, Card, Col, ConfigProvider, Form, Input, InputNumber, Layout, Row, Space, Spin, Switch, Tag, message } from 'antd';
+import { PoweroffOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 
 import AppSidebar from '@/layouts/AppSidebar';
 import { useTheme } from '@/hooks/useTheme';
 import { useStatusQuery } from '@/api/queries/useStatusQuery';
-import { HttpUtil, RandomUtil, Wireguard } from '@/utils';
+import { HttpUtil, RandomUtil, SizeFormatter, Wireguard } from '@/utils';
 import { createDefaultAmneziawgInboundSettings } from '@/lib/xray/inbound-defaults';
 import { coerceInboundJsonField, type DBInboundInit } from '@/models/dbinbound';
+import type { AwgPeer } from '@/models/status';
 import '@/pages/index/IndexPage.css';
 
 interface AwgFormValues {
@@ -129,12 +130,18 @@ function payloadFromForm(values: AwgFormValues) {
   };
 }
 
+function formatHandshake(peer: AwgPeer) {
+  if (!peer.latestHandshake) return 'no handshake';
+  return new Date(peer.latestHandshake * 1000).toLocaleString();
+}
+
 export default function AwgPage() {
   const { isDark, isUltra, antdThemeConfig } = useTheme();
   const { status, refresh: refreshStatus } = useStatusQuery();
   const [form] = Form.useForm<AwgFormValues>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [runtimeBusy, setRuntimeBusy] = useState(false);
   const [inbound, setInbound] = useState<DBInboundInit | null>(null);
   const [messageApi, messageContextHolder] = message.useMessage();
 
@@ -166,8 +173,11 @@ export default function AwgPage() {
       <Tag color={status.awg.running ? 'green' : 'orange'}>
         {status.awg.running ? 'running' : 'stopped'}
       </Tag>
+      <Tag color={status.awg.onlineCount > 0 ? 'green' : 'default'}>
+        {status.awg.onlineCount}/{status.awg.peerCount} peers
+      </Tag>
     </Space>
-  ), [status.awg.installed, status.awg.running, status.awg.version]);
+  ), [status.awg.installed, status.awg.onlineCount, status.awg.peerCount, status.awg.running, status.awg.version]);
 
   async function save() {
     const values = await form.validateFields();
@@ -190,6 +200,47 @@ export default function AwgPage() {
     form.setFieldsValue({ secretKey: kp.privateKey, publicKey: kp.publicKey });
   }
 
+  async function setAwgEnabled(enable: boolean) {
+    const values = form.getFieldsValue();
+    const id = values.id || inbound?.id;
+    if (!id) {
+      messageApi.warning('Save AmneziaWG inbound first');
+      return;
+    }
+    setRuntimeBusy(true);
+    try {
+      const msg = await HttpUtil.post(`/panel/api/inbounds/setEnable/${id}`, { enable });
+      if (msg?.success) {
+        messageApi.success(enable ? 'AmneziaWG started' : 'AmneziaWG stopped');
+        await load();
+      }
+    } finally {
+      setRuntimeBusy(false);
+    }
+  }
+
+  async function restartAwg() {
+    const values = form.getFieldsValue();
+    const id = values.id || inbound?.id;
+    if (!id) {
+      messageApi.warning('Save AmneziaWG inbound first');
+      return;
+    }
+    setRuntimeBusy(true);
+    try {
+      await HttpUtil.post(`/panel/api/inbounds/setEnable/${id}`, { enable: false }, { silent: true });
+      const msg = await HttpUtil.post(`/panel/api/inbounds/setEnable/${id}`, { enable: true });
+      if (msg?.success) {
+        messageApi.success('AmneziaWG restarted');
+        await load();
+      }
+    } finally {
+      setRuntimeBusy(false);
+    }
+  }
+
+  const peerRows = status.awg.peers || [];
+
   return (
     <ConfigProvider theme={antdThemeConfig}>
       {messageContextHolder}
@@ -198,116 +249,163 @@ export default function AwgPage() {
         <Layout className="content-shell">
           <Layout.Content className="content-area">
             <Spin spinning={loading}>
-              <Card
-                title="AmneziaWG"
-                extra={headerExtra}
-                actions={[
-                  <Space className="action" key="reload" role="button" tabIndex={0} onClick={load}>
-                    <ReloadOutlined />
-                    <span>Reload</span>
-                  </Space>,
-                  <Space className="action" key="save" role="button" tabIndex={0} onClick={save}>
-                    <SaveOutlined />
-                    <span>Save</span>
-                  </Space>,
-                ]}
-              >
-                <Form form={form} layout="vertical" initialValues={defaultForm} disabled={saving}>
-                  <Form.Item name="id" hidden><InputNumber /></Form.Item>
-                  <Row gutter={16}>
-                    <Col xs={24} md={8}>
-                      <Form.Item name="enable" label="Enabled" valuePropName="checked">
-                        <Switch />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} md={8}>
-                      <Form.Item name="remark" label="Name" rules={[{ required: true }]}>
-                        <Input />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} md={8}>
-                      <Form.Item name="port" label="Listen port" rules={[{ required: true }]}>
-                        <InputNumber min={1} max={65535} style={{ width: '100%' }} />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} md={8}>
-                      <Form.Item name="listen" label="Listen IP">
-                        <Input placeholder="0.0.0.0" />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} md={8}>
-                      <Form.Item name="address" label="Server address" rules={[{ required: true }]}>
-                        <Input placeholder="10.66.66.1/24" />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} md={8}>
-                      <Form.Item name="externalInterface" label="External interface">
-                        <Input placeholder="eth0" />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24}>
-                      <Form.Item label="Server private key" required>
-                        <Space.Compact style={{ display: 'flex' }}>
-                          <Form.Item name="secretKey" noStyle rules={[{ required: true }]}>
-                            <Input
-                              style={{ flex: 1 }}
-                              onChange={(event) => {
-                                const secretKey = event.target.value;
-                                form.setFieldValue('publicKey', secretKey ? Wireguard.generateKeypair(secretKey).publicKey : '');
-                              }}
-                            />
+              <Row gutter={[16, 16]}>
+                <Col span={24}>
+                  <Card
+                    title="AmneziaWG runtime"
+                    extra={headerExtra}
+                    actions={[
+                      <Space className="action" key="reload" role="button" tabIndex={0} onClick={load}>
+                        <ReloadOutlined />
+                        <span>Reload</span>
+                      </Space>,
+                      <Space className="action" key="toggle" role="button" tabIndex={0} onClick={() => setAwgEnabled(!status.awg.running)}>
+                        <PoweroffOutlined />
+                        <span>{status.awg.running ? 'Stop' : 'Start'}</span>
+                      </Space>,
+                      <Space className="action" key="restart" role="button" tabIndex={0} onClick={restartAwg}>
+                        <ReloadOutlined />
+                        <span>Restart</span>
+                      </Space>,
+                    ]}
+                  >
+                    <Spin spinning={runtimeBusy}>
+                      {status.awg.error && <Alert type="error" showIcon message={status.awg.error} style={{ marginBottom: 12 }} />}
+                      {!status.awg.installed && <Alert type="warning" showIcon message="awg runtime is not installed on this server" style={{ marginBottom: 12 }} />}
+                      <div className="awg-peer-list">
+                        {peerRows.length === 0 ? (
+                          <Tag>no runtime peers</Tag>
+                        ) : peerRows.map((peer, idx) => (
+                          <div className="awg-peer-row" key={`${peer.publicKey || idx}`}>
+                            <div className="awg-peer-main">
+                              <span>{peer.email || peer.publicKey || `peer-${idx + 1}`}</span>
+                              <Badge status={peer.online ? 'success' : 'default'} text={peer.online ? 'online' : 'idle'} />
+                            </div>
+                            <div className="awg-peer-meta">{peer.interfaceName || 'awg'} / {peer.endpoint || 'no endpoint'}</div>
+                            <div className="awg-peer-meta">{(peer.allowedIPs || []).join(', ') || 'no allowed IPs'}</div>
+                            <div className="awg-peer-meta">
+                              up {SizeFormatter.sizeFormat(peer.transferTx || 0)} / down {SizeFormatter.sizeFormat(peer.transferRx || 0)}
+                            </div>
+                            <div className="awg-peer-meta">{formatHandshake(peer)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </Spin>
+                  </Card>
+                </Col>
+
+                <Col span={24}>
+                  <Card
+                    title="AmneziaWG settings"
+                    extra={inbound?.id ? <Tag>inbound #{inbound.id}</Tag> : null}
+                    actions={[
+                      <Space className="action" key="reload" role="button" tabIndex={0} onClick={load}>
+                        <ReloadOutlined />
+                        <span>Reload</span>
+                      </Space>,
+                      <Space className="action" key="save" role="button" tabIndex={0} onClick={save}>
+                        <SaveOutlined />
+                        <span>Save</span>
+                      </Space>,
+                    ]}
+                  >
+                    <Form form={form} layout="vertical" initialValues={defaultForm} disabled={saving}>
+                      <Form.Item name="id" hidden><InputNumber /></Form.Item>
+                      <Row gutter={16}>
+                        <Col xs={24} md={8}>
+                          <Form.Item name="enable" label="Enabled" valuePropName="checked">
+                            <Switch />
                           </Form.Item>
-                          <Button icon={<ReloadOutlined />} onClick={regenerateServerKey} />
-                        </Space.Compact>
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24}>
-                      <Form.Item name="publicKey" label="Server public key">
-                        <Input disabled />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} md={12}>
-                      <Form.Item name="dns" label="Client DNS">
-                        <Input />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} md={12}>
-                      <Form.Item name="mtu" label="MTU">
-                        <InputNumber min={1} style={{ width: '100%' }} />
-                      </Form.Item>
-                    </Col>
-                  </Row>
+                        </Col>
+                        <Col xs={24} md={8}>
+                          <Form.Item name="remark" label="Name" rules={[{ required: true }]}>
+                            <Input />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={8}>
+                          <Form.Item name="port" label="Listen port" rules={[{ required: true }]}>
+                            <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={8}>
+                          <Form.Item name="listen" label="Listen IP">
+                            <Input placeholder="0.0.0.0" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={8}>
+                          <Form.Item name="address" label="Server address" rules={[{ required: true }]}>
+                            <Input placeholder="10.66.66.1/24" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={8}>
+                          <Form.Item name="externalInterface" label="External interface">
+                            <Input placeholder="eth0" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24}>
+                          <Form.Item label="Server private key" required>
+                            <Space.Compact style={{ display: 'flex' }}>
+                              <Form.Item name="secretKey" noStyle rules={[{ required: true }]}>
+                                <Input
+                                  style={{ flex: 1 }}
+                                  onChange={(event) => {
+                                    const secretKey = event.target.value;
+                                    form.setFieldValue('publicKey', secretKey ? Wireguard.generateKeypair(secretKey).publicKey : '');
+                                  }}
+                                />
+                              </Form.Item>
+                              <Button icon={<ReloadOutlined />} onClick={regenerateServerKey} />
+                            </Space.Compact>
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24}>
+                          <Form.Item name="publicKey" label="Server public key">
+                            <Input disabled />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="dns" label="Client DNS">
+                            <Input />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="mtu" label="MTU">
+                            <InputNumber min={1} style={{ width: '100%' }} />
+                          </Form.Item>
+                        </Col>
+                      </Row>
 
-                  <Row gutter={12}>
-                    {(['jc', 'jmin', 'jmax', 's1', 's2', 'h1', 'h2', 'h3', 'h4'] as const).map((key) => (
-                      <Col xs={12} md={8} lg={4} key={key}>
-                        <Form.Item name={key} label={key.toUpperCase()}>
-                          <InputNumber min={0} style={{ width: '100%' }} />
-                        </Form.Item>
-                      </Col>
-                    ))}
-                  </Row>
+                      <Row gutter={12}>
+                        {(['jc', 'jmin', 'jmax', 's1', 's2', 'h1', 'h2', 'h3', 'h4'] as const).map((key) => (
+                          <Col xs={12} md={8} lg={4} key={key}>
+                            <Form.Item name={key} label={key.toUpperCase()}>
+                              <InputNumber min={0} style={{ width: '100%' }} />
+                            </Form.Item>
+                          </Col>
+                        ))}
+                      </Row>
 
-                  <Row gutter={16}>
-                    <Col xs={24} md={12}>
-                      <Form.Item name="postUp" label="PostUp">
-                        <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} md={12}>
-                      <Form.Item name="postDown" label="PostDown">
-                        <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
-                      </Form.Item>
-                    </Col>
-                  </Row>
+                      <Row gutter={16}>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="postUp" label="PostUp">
+                            <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name="postDown" label="PostDown">
+                            <Input.TextArea autoSize={{ minRows: 3, maxRows: 6 }} />
+                          </Form.Item>
+                        </Col>
+                      </Row>
 
-                  <Space>
-                    <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={save}>Save</Button>
-                    <Button icon={<ReloadOutlined />} onClick={load}>Reload</Button>
-                    {inbound?.id && <Tag>inbound #{inbound.id}</Tag>}
-                  </Space>
-                </Form>
-              </Card>
+                      <Space>
+                        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={save}>Save</Button>
+                        <Button icon={<ReloadOutlined />} onClick={load}>Reload</Button>
+                      </Space>
+                    </Form>
+                  </Card>
+                </Col>
+              </Row>
             </Spin>
           </Layout.Content>
         </Layout>

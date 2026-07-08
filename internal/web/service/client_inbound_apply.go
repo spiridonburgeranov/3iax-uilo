@@ -358,7 +358,7 @@ func (s *ClientService) addInboundClient(inboundSvc *InboundService, data *model
 	}
 
 	if oldInbound.Protocol == model.WireGuard || oldInbound.Protocol == model.AmneziaWG {
-		if dErr := defaultWireguardClients(existingClients, clients, interfaceClients); dErr != nil {
+		if dErr := defaultTunnelClients(oldInbound.Protocol, oldInbound.Settings, existingClients, clients, interfaceClients); dErr != nil {
 			return false, dErr
 		}
 	}

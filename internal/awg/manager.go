@@ -74,6 +74,7 @@ type PeerRuntime struct {
 }
 
 type peerDumpRow struct {
+	InterfaceName   string
 	PublicKey       string
 	Endpoint        string
 	AllowedIPs      []string
@@ -141,6 +142,30 @@ func RuntimePeers(inbound *model.Inbound) ([]PeerRuntime, error) {
 			InboundRemark:   inbound.Remark,
 			InterfaceName:   iface,
 			Email:           emailByKey[row.PublicKey],
+			PublicKey:       row.PublicKey,
+			Endpoint:        row.Endpoint,
+			AllowedIPs:      row.AllowedIPs,
+			LatestHandshake: row.LatestHandshake,
+			TransferRx:      row.TransferRx,
+			TransferTx:      row.TransferTx,
+			KeepAlive:       row.KeepAlive,
+			Online:          online,
+		})
+	}
+	return out, nil
+}
+
+func RuntimeAllPeers() ([]PeerRuntime, error) {
+	rows, err := dumpAllPeers()
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().Unix()
+	out := make([]PeerRuntime, 0, len(rows))
+	for _, row := range rows {
+		online := row.LatestHandshake > 0 && now-row.LatestHandshake <= 180
+		out = append(out, PeerRuntime{
+			InterfaceName:   row.InterfaceName,
 			PublicKey:       row.PublicKey,
 			Endpoint:        row.Endpoint,
 			AllowedIPs:      row.AllowedIPs,
@@ -419,7 +444,7 @@ func collectPeers(parsed *inboundSettings) ([]peer, error) {
 		}
 		allowed := normalizeAllowedIPs(c.AllowedIPs)
 		if len(allowed) == 0 {
-			next, err := allocateAddress(used)
+			next, err := allocateAddress(used, serverIPv4Prefix(parsed.Address))
 			if err != nil {
 				return nil, err
 			}
@@ -468,8 +493,11 @@ func normalizeAllowedIPs(values []string) []string {
 	return out
 }
 
-func allocateAddress(used []string) (string, error) {
-	prefix, err := netip.ParsePrefix("10.66.66.0/24")
+func allocateAddress(used []string, base string) (string, error) {
+	if strings.TrimSpace(base) == "" {
+		base = "10.66.66.0/24"
+	}
+	prefix, err := netip.ParsePrefix(base)
 	if err != nil {
 		return "", err
 	}
@@ -515,9 +543,44 @@ func dumpPeers(interfaceName string) ([]peerDumpRow, error) {
 		tx, _ := strconv.ParseUint(fields[6], 10, 64)
 		keepAlive, _ := strconv.Atoi(fields[7])
 		out = append(out, peerDumpRow{
+			InterfaceName:   interfaceName,
 			PublicKey:       fields[0],
 			Endpoint:        fields[2],
 			AllowedIPs:      splitAllowedIPs(fields[3]),
+			LatestHandshake: handshake,
+			TransferRx:      rx,
+			TransferTx:      tx,
+			KeepAlive:       keepAlive,
+		})
+	}
+	return out, nil
+}
+
+func dumpAllPeers() ([]peerDumpRow, error) {
+	cmd := exec.Command("awg", "show", "all", "dump")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("awg show all dump failed: %w", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) <= 1 {
+		return nil, nil
+	}
+	out := make([]peerDumpRow, 0, len(lines)-1)
+	for _, line := range lines {
+		fields := strings.Split(line, "\t")
+		if len(fields) < 9 {
+			continue
+		}
+		handshake, _ := strconv.ParseInt(fields[5], 10, 64)
+		rx, _ := strconv.ParseUint(fields[6], 10, 64)
+		tx, _ := strconv.ParseUint(fields[7], 10, 64)
+		keepAlive, _ := strconv.Atoi(fields[8])
+		out = append(out, peerDumpRow{
+			InterfaceName:   fields[0],
+			PublicKey:       fields[1],
+			Endpoint:        fields[3],
+			AllowedIPs:      splitAllowedIPs(fields[4]),
 			LatestHandshake: handshake,
 			TransferRx:      rx,
 			TransferTx:      tx,

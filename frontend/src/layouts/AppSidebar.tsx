@@ -157,7 +157,6 @@ export default function AppSidebar() {
   const tabs = useMemo<{ key: string; icon: IconName; title: string }[]>(() => [
     { key: '/', icon: 'dashboard', title: t('menu.dashboard') },
     { key: '/inbounds', icon: 'inbound', title: t('menu.inbounds') },
-    { key: '/awg', icon: 'inbound', title: 'AmneziaWG' },
     { key: '/clients', icon: 'team', title: t('menu.clients') },
     { key: '/groups', icon: 'groups', title: t('menu.groups') },
     { key: '/nodes', icon: 'cluster', title: t('menu.nodes') },
@@ -191,18 +190,22 @@ export default function AppSidebar() {
     { key: '/xray#basic', icon: <SettingOutlined />, label: t('pages.xray.basicTemplate') },
     { key: '/xray#balancer', icon: <ClusterOutlined />, label: t('pages.xray.Balancers') },
     { key: '/xray#dns', icon: <DatabaseOutlined />, label: 'DNS' },
+    { key: '/awg', icon: <ImportOutlined />, label: 'AmneziaWG' },
     { key: '/xray#advanced', icon: <CodeOutlined />, label: t('pages.xray.advancedTemplate') },
   ], [t]);
 
   const settingsActive = pathname === '/settings';
   const xrayActive = pathname === '/xray';
+  const awgActive = pathname === '/awg';
   const selectedKey = settingsActive
     ? `/settings${hash || '#general'}`
     : xrayActive
       ? `/xray${hash || '#basic'}`
-      : (pathname === '' ? '/' : pathname);
+      : awgActive
+        ? '/awg'
+        : (pathname === '' ? '/' : pathname);
 
-  const openSubmenu = settingsActive ? '/settings' : xrayActive ? '/xray' : null;
+  const openSubmenu = settingsActive ? '/settings' : xrayActive || awgActive ? '/xray' : null;
   const [openKeys, setOpenKeys] = useState<string[]>(() => (openSubmenu ? [openSubmenu] : []));
   useEffect(() => {
     if (openSubmenu) {

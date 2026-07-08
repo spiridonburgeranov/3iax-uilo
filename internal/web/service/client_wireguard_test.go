@@ -60,6 +60,34 @@ func TestDefaultWireguardClientsGeneratesKeypair(t *testing.T) {
 	}
 }
 
+func TestDefaultTunnelClientsUsesAmneziaWGSubnet(t *testing.T) {
+	clients := []model.Client{{Email: "a@awg"}}
+	ifaces := []any{map[string]any{"email": "a@awg"}}
+	settings := `{"address":"10.66.66.1/24"}`
+	if err := defaultTunnelClients(model.AmneziaWG, settings, nil, clients, ifaces); err != nil {
+		t.Fatalf("defaultTunnelClients: %v", err)
+	}
+	if len(clients[0].AllowedIPs) != 1 || clients[0].AllowedIPs[0] != "10.66.66.2/32" {
+		t.Fatalf("amneziawg allowedIPs not allocated from server subnet: %v", clients[0].AllowedIPs)
+	}
+	m := ifaces[0].(map[string]any)
+	if got := m["allowedIPs"]; got == nil {
+		t.Fatalf("interface map missing allowedIPs: %v", m)
+	}
+}
+
+func TestDefaultTunnelClientsUsesCustomAmneziaWGSubnet(t *testing.T) {
+	clients := []model.Client{{Email: "b@awg"}}
+	ifaces := []any{map[string]any{"email": "b@awg"}}
+	settings := `{"address":"172.20.30.1/24"}`
+	if err := defaultTunnelClients(model.AmneziaWG, settings, nil, clients, ifaces); err != nil {
+		t.Fatalf("defaultTunnelClients: %v", err)
+	}
+	if len(clients[0].AllowedIPs) != 1 || clients[0].AllowedIPs[0] != "172.20.30.2/32" {
+		t.Fatalf("amneziawg allowedIPs not allocated from custom subnet: %v", clients[0].AllowedIPs)
+	}
+}
+
 func TestDefaultWireguardClientsDerivesPublicKey(t *testing.T) {
 	priv, _, err := wgutil.GenerateWireguardKeypair()
 	if err != nil {

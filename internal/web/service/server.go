@@ -624,6 +624,18 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	status.Awg.Version = "unknown"
 	if status.Awg.Installed {
 		status.Awg.Version = awg.Version()
+		runtimePeers, runtimeErr := awg.RuntimeAllPeers()
+		if runtimeErr != nil {
+			status.Awg.Error = runtimeErr.Error()
+		}
+		if len(runtimePeers) > 0 {
+			status.Awg.Running = true
+		}
+		peerByKey := make(map[string]int, len(runtimePeers))
+		for _, peer := range runtimePeers {
+			peerByKey[peer.PublicKey] = len(status.Awg.Peers)
+			status.Awg.Peers = append(status.Awg.Peers, peer)
+		}
 		var inbounds []*model.Inbound
 		if err := database.GetDB().Where("protocol = ? AND enable = ? AND node_id IS NULL", model.AmneziaWG, true).Find(&inbounds).Error; err == nil {
 			for _, inbound := range inbounds {
@@ -634,14 +646,26 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 						status.Awg.Error = peerErr.Error()
 						continue
 					}
-					status.Awg.Peers = append(status.Awg.Peers, peers...)
 					for _, peer := range peers {
-						status.Awg.PeerCount++
-						if peer.Online {
-							status.Awg.OnlineCount++
+						if idx, ok := peerByKey[peer.PublicKey]; ok {
+							status.Awg.Peers[idx].InboundID = peer.InboundID
+							status.Awg.Peers[idx].InboundRemark = peer.InboundRemark
+							status.Awg.Peers[idx].Email = peer.Email
+						} else {
+							peerByKey[peer.PublicKey] = len(status.Awg.Peers)
+							status.Awg.Peers = append(status.Awg.Peers, peer)
 						}
 					}
 				}
+			}
+		}
+		status.Awg.PeerCount = len(status.Awg.Peers)
+		for _, peer := range status.Awg.Peers {
+			if peer.Online {
+				status.Awg.OnlineCount++
+			}
+			if peer.Endpoint != "" {
+				status.Awg.Running = true
 			}
 		}
 	}
