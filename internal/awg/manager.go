@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
@@ -57,6 +58,31 @@ type peerConfig struct {
 	KeepAlive  int      `json:"keepAlive"`
 }
 
+type PeerRuntime struct {
+	InboundID       int      `json:"inboundId"`
+	InboundRemark   string   `json:"inboundRemark"`
+	InterfaceName   string   `json:"interfaceName"`
+	Email           string   `json:"email"`
+	PublicKey       string   `json:"publicKey"`
+	Endpoint        string   `json:"endpoint"`
+	AllowedIPs      []string `json:"allowedIPs"`
+	LatestHandshake int64    `json:"latestHandshake"`
+	TransferRx      uint64   `json:"transferRx"`
+	TransferTx      uint64   `json:"transferTx"`
+	KeepAlive       int      `json:"keepAlive"`
+	Online          bool     `json:"online"`
+}
+
+type peerDumpRow struct {
+	PublicKey       string
+	Endpoint        string
+	AllowedIPs      []string
+	LatestHandshake int64
+	TransferRx      uint64
+	TransferTx      uint64
+	KeepAlive       int
+}
+
 func IsInstalled() bool {
 	_, err1 := exec.LookPath("awg")
 	_, err2 := exec.LookPath("awg-quick")
@@ -83,6 +109,49 @@ func IsInboundUp(inbound *model.Inbound) bool {
 		return false
 	}
 	return isUp(interfaceName(inbound))
+}
+
+func RuntimePeers(inbound *model.Inbound) ([]PeerRuntime, error) {
+	if inbound == nil {
+		return nil, nil
+	}
+	var parsed inboundSettings
+	if err := json.Unmarshal([]byte(inbound.Settings), &parsed); err != nil {
+		return nil, common.NewError("invalid amneziawg inbound settings:", err)
+	}
+	configPeers, err := collectPeers(&parsed)
+	if err != nil {
+		return nil, err
+	}
+	emailByKey := make(map[string]string, len(configPeers))
+	for _, p := range configPeers {
+		emailByKey[p.PublicKey] = p.Email
+	}
+	iface := interfaceName(inbound)
+	rows, err := dumpPeers(iface)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().Unix()
+	out := make([]PeerRuntime, 0, len(rows))
+	for _, row := range rows {
+		online := row.LatestHandshake > 0 && now-row.LatestHandshake <= 180
+		out = append(out, PeerRuntime{
+			InboundID:       inbound.Id,
+			InboundRemark:   inbound.Remark,
+			InterfaceName:   iface,
+			Email:           emailByKey[row.PublicKey],
+			PublicKey:       row.PublicKey,
+			Endpoint:        row.Endpoint,
+			AllowedIPs:      row.AllowedIPs,
+			LatestHandshake: row.LatestHandshake,
+			TransferRx:      row.TransferRx,
+			TransferTx:      row.TransferTx,
+			KeepAlive:       row.KeepAlive,
+			Online:          online,
+		})
+	}
+	return out, nil
 }
 
 func ApplyInbound(inbound *model.Inbound) error {
@@ -423,6 +492,54 @@ func allocateAddress(used []string) (string, error) {
 func isUp(interfaceName string) bool {
 	cmd := exec.Command("awg", "show", interfaceName)
 	return cmd.Run() == nil
+}
+
+func dumpPeers(interfaceName string) ([]peerDumpRow, error) {
+	cmd := exec.Command("awg", "show", interfaceName, "dump")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("awg show dump failed: %w", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	if len(lines) <= 1 {
+		return nil, nil
+	}
+	out := make([]peerDumpRow, 0, len(lines)-1)
+	for _, line := range lines[1:] {
+		fields := strings.Split(line, "\t")
+		if len(fields) < 8 {
+			continue
+		}
+		handshake, _ := strconv.ParseInt(fields[4], 10, 64)
+		rx, _ := strconv.ParseUint(fields[5], 10, 64)
+		tx, _ := strconv.ParseUint(fields[6], 10, 64)
+		keepAlive, _ := strconv.Atoi(fields[7])
+		out = append(out, peerDumpRow{
+			PublicKey:       fields[0],
+			Endpoint:        fields[2],
+			AllowedIPs:      splitAllowedIPs(fields[3]),
+			LatestHandshake: handshake,
+			TransferRx:      rx,
+			TransferTx:      tx,
+			KeepAlive:       keepAlive,
+		})
+	}
+	return out, nil
+}
+
+func splitAllowedIPs(value string) []string {
+	if value == "" || value == "(none)" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		v := strings.TrimSpace(part)
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func up(configPath string) error {

@@ -11,9 +11,16 @@ export function findWireguardInbound(
   client: ClientRecord | null | undefined,
   inboundsById: Record<number, InboundOption>,
 ): InboundOption | undefined {
+  return findTunnelInbounds(client, inboundsById).find((ib) => ib.protocol === 'wireguard');
+}
+
+export function findTunnelInbounds(
+  client: ClientRecord | null | undefined,
+  inboundsById: Record<number, InboundOption>,
+): InboundOption[] {
   return (client?.inboundIds || [])
     .map((id) => inboundsById[id])
-    .find((ib) => ib?.protocol === 'wireguard' || ib?.protocol === 'amneziawg');
+    .filter((ib): ib is InboundOption => ib?.protocol === 'wireguard' || ib?.protocol === 'amneziawg');
 }
 
 export function buildWireguardClientConfig(

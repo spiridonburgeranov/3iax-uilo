@@ -33,10 +33,29 @@ export const XrayInfoSchema = z.object({
   color: z.string(),
 }).partial();
 
+export const AwgPeerSchema = z.object({
+  inboundId: z.number(),
+  inboundRemark: z.string(),
+  interfaceName: z.string(),
+  email: z.string(),
+  publicKey: z.string(),
+  endpoint: z.string(),
+  allowedIPs: z.array(z.string()),
+  latestHandshake: z.number(),
+  transferRx: z.number(),
+  transferTx: z.number(),
+  keepAlive: z.number(),
+  online: z.boolean(),
+}).partial();
+
 export const AwgInfoSchema = z.object({
   installed: z.boolean(),
   running: z.boolean(),
   version: z.string(),
+  peerCount: z.number(),
+  onlineCount: z.number(),
+  error: z.string(),
+  peers: z.array(AwgPeerSchema),
 }).partial();
 
 export const StatusSchema = z.object({

@@ -56,10 +56,29 @@ export interface XrayInfo {
   color: string;
 }
 
+export interface AwgPeer {
+  inboundId?: number;
+  inboundRemark?: string;
+  interfaceName?: string;
+  email?: string;
+  publicKey?: string;
+  endpoint?: string;
+  allowedIPs?: string[];
+  latestHandshake?: number;
+  transferRx?: number;
+  transferTx?: number;
+  keepAlive?: number;
+  online?: boolean;
+}
+
 export interface AwgInfo {
   installed: boolean;
   running: boolean;
   version: string;
+  peerCount: number;
+  onlineCount: number;
+  error: string;
+  peers: AwgPeer[];
 }
 
 interface StatusInput {
@@ -101,7 +120,7 @@ export class Status {
   appUptime = 0;
   appStats: AppStats = { threads: 0, mem: 0, uptime: 0 };
   xray: XrayInfo = { state: 'stop', errorMsg: '', version: '', color: '' };
-  awg: AwgInfo = { installed: false, running: false, version: 'unknown' };
+  awg: AwgInfo = { installed: false, running: false, version: 'unknown', peerCount: 0, onlineCount: 0, error: '', peers: [] };
 
   constructor(data?: StatusInput | null) {
     if (data == null) return;

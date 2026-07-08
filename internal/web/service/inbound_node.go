@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mhsanaei/3x-ui/v3/internal/awg"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
@@ -1009,10 +1010,11 @@ func (s *InboundService) setRemoteTrafficLocked(nodeID int, snap *runtime.Traffi
 }
 
 func (s *InboundService) GetOnlineClients() []string {
+	awgOnline := s.getAwgOnlineClients()
 	if p == nil {
-		return []string{}
+		return awgOnline
 	}
-	return p.GetOnlineClients()
+	return mergeEmails(p.GetOnlineClients(), awgOnline)
 }
 
 // GetOnlineClientsByGuid returns online emails keyed by the panelGuid of the
@@ -1021,13 +1023,47 @@ func (s *InboundService) GetOnlineClients() []string {
 // node-id keying so a client three hops down is attributed to its real node,
 // not the intermediate one it was synced through.
 func (s *InboundService) GetOnlineClientsByGuid() map[string][]string {
+	awgOnline := s.getAwgOnlineClients()
 	if p == nil {
+		if len(awgOnline) == 0 {
+			return map[string][]string{}
+		}
+		if guid := s.panelGuid(); guid != "" {
+			return map[string][]string{guid: awgOnline}
+		}
 		return map[string][]string{}
 	}
 	out := p.GetMergedNodeTrees()
-	if local := p.GetLocalOnlineClients(); len(local) > 0 {
+	local := mergeEmails(p.GetLocalOnlineClients(), awgOnline)
+	if len(local) > 0 {
 		if guid := s.panelGuid(); guid != "" {
 			out[guid] = mergeEmails(out[guid], local)
+		}
+	}
+	return out
+}
+
+func (s *InboundService) getAwgOnlineClients() []string {
+	if !awg.IsInstalled() {
+		return nil
+	}
+	var inbounds []*model.Inbound
+	if err := database.GetDB().Where("protocol = ? AND enable = ? AND node_id IS NULL", model.AmneziaWG, true).Find(&inbounds).Error; err != nil {
+		return nil
+	}
+	out := []string{}
+	for _, inbound := range inbounds {
+		if !awg.IsInboundUp(inbound) {
+			continue
+		}
+		peers, err := awg.RuntimePeers(inbound)
+		if err != nil {
+			continue
+		}
+		for _, peer := range peers {
+			if peer.Online && peer.Email != "" {
+				out = append(out, peer.Email)
+			}
 		}
 	}
 	return out

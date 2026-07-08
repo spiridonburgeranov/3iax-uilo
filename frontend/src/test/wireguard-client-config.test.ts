@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildAmneziaClientConfig, buildWireguardClientConfig, clientTunnelConfigLabel } from '@/pages/clients/wireguardConfig';
+import {
+  buildAmneziaClientConfig,
+  buildWireguardClientConfig,
+  clientTunnelConfigLabel,
+  findTunnelInbounds,
+  findWireguardInbound,
+} from '@/pages/clients/wireguardConfig';
 import type { ClientRecord, InboundOption } from '@/hooks/useClients';
 
 const client: ClientRecord = {
@@ -138,5 +144,13 @@ describe('buildWireguardClientConfig', () => {
   it('labels AmneziaWG configs separately from WireGuard', () => {
     expect(clientTunnelConfigLabel({ ...inbound, protocol: 'amneziawg' })).toBe('AmneziaWG config');
     expect(clientTunnelConfigLabel(inbound)).toBe('WireGuard config');
+  });
+
+  it('does not return an AmneziaWG inbound from the WireGuard-only lookup', () => {
+    const awgInbound = { ...inbound, id: 91, protocol: 'amneziawg' };
+    const inboundsById = { 90: inbound, 91: awgInbound };
+    const attachedClient = { ...client, inboundIds: [91, 90] };
+    expect(findWireguardInbound(attachedClient, inboundsById)?.id).toBe(90);
+    expect(findTunnelInbounds(attachedClient, inboundsById).map((ib) => ib.protocol)).toEqual(['amneziawg', 'wireguard']);
   });
 });

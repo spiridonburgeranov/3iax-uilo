@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Divider, Modal, Popover, Tag, Tooltip, message } from 'antd';
 import { CopyOutlined, EyeOutlined, QrcodeOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -15,7 +15,7 @@ import ConfigBlock from '@/components/clients/ConfigBlock';
 import {
   buildClientTunnelConfig,
   clientTunnelConfigLabel,
-  findWireguardInbound,
+  findTunnelInbounds,
   isWireguardClient,
 } from './wireguardConfig';
 import './ClientInfoModal.css';
@@ -141,12 +141,14 @@ export default function ClientInfoModal({
   }, [client?.subId, subSettings?.subClashEnable, subSettings?.subClashURI]);
 
   const showSubscription = !!(subSettings?.enable && client?.subId);
-  const wgInbound = useMemo(() => findWireguardInbound(client, inboundsById), [client, inboundsById]);
-  const wgConfigText = useMemo(() => {
-    if (!client || !wgInbound || !isWireguardClient(client)) return '';
-    return buildClientTunnelConfig(client, wgInbound, window.location.hostname, subSettings?.publicHost ?? '');
-  }, [client, wgInbound, subSettings?.publicHost]);
-  const wgConfigLabel = useMemo(() => clientTunnelConfigLabel(wgInbound), [wgInbound]);
+  const tunnelConfigs = useMemo(() => {
+    if (!client || !isWireguardClient(client)) return [];
+    return findTunnelInbounds(client, inboundsById).map((inbound) => ({
+      id: inbound.id,
+      label: clientTunnelConfigLabel(inbound),
+      text: buildClientTunnelConfig(client, inbound, window.location.hostname, subSettings?.publicHost ?? ''),
+    })).filter((item) => item.text.length > 0);
+  }, [client, inboundsById, subSettings?.publicHost]);
 
   async function copyValue(text: string) {
     if (!text) return;
@@ -502,15 +504,19 @@ export default function ClientInfoModal({
               </>
             )}
 
-            {wgConfigText && client && (
+            {tunnelConfigs.length > 0 && client && (
               <>
-                <Divider>{wgConfigLabel}</Divider>
-                <ConfigBlock
-                  label={t('pages.clients.config')}
-                  text={wgConfigText}
-                  fileName={`${client.email}.conf`}
-                  qrRemark={client.email || 'peer'}
-                />
+                {tunnelConfigs.map((cfg) => (
+                  <Fragment key={cfg.id}>
+                    <Divider>{cfg.label}</Divider>
+                    <ConfigBlock
+                      label={t('pages.clients.config')}
+                      text={cfg.text}
+                      fileName={`${client.email}-${cfg.label.toLowerCase().replace(/\s+/g, '-')}.conf`}
+                      qrRemark={client.email || 'peer'}
+                    />
+                  </Fragment>
+                ))}
               </>
             )}
           </>

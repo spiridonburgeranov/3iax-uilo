@@ -90,9 +90,13 @@ type Status struct {
 		Version  string       `json:"version"`
 	} `json:"xray"`
 	Awg struct {
-		Installed bool   `json:"installed"`
-		Running   bool   `json:"running"`
-		Version   string `json:"version"`
+		Installed   bool              `json:"installed"`
+		Running     bool              `json:"running"`
+		Version     string            `json:"version"`
+		PeerCount   int               `json:"peerCount"`
+		OnlineCount int               `json:"onlineCount"`
+		Error       string            `json:"error,omitempty"`
+		Peers       []awg.PeerRuntime `json:"peers,omitempty"`
 	} `json:"awg"`
 	PanelVersion string    `json:"panelVersion"`
 	PanelGuid    string    `json:"panelGuid"`
@@ -625,7 +629,18 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 			for _, inbound := range inbounds {
 				if awg.IsInboundUp(inbound) {
 					status.Awg.Running = true
-					break
+					peers, peerErr := awg.RuntimePeers(inbound)
+					if peerErr != nil {
+						status.Awg.Error = peerErr.Error()
+						continue
+					}
+					status.Awg.Peers = append(status.Awg.Peers, peers...)
+					for _, peer := range peers {
+						status.Awg.PeerCount++
+						if peer.Online {
+							status.Awg.OnlineCount++
+						}
+					}
 				}
 			}
 		}

@@ -9,7 +9,7 @@ import type { ClientRecord, InboundOption } from '@/hooks/useClients';
 import {
   buildClientTunnelConfig,
   clientTunnelConfigLabel,
-  findWireguardInbound,
+  findTunnelInbounds,
   isWireguardClient,
 } from './wireguardConfig';
 
@@ -58,14 +58,16 @@ export default function ClientQrModal({
     return subSettings.subJsonURI + client.subId;
   }, [client?.subId, subSettings?.enable, subSettings?.subJsonEnable, subSettings?.subJsonURI]);
 
-  const wgInbound = useMemo(() => findWireguardInbound(client, inboundsById), [client, inboundsById]);
-  const wgConfigText = useMemo(() => {
-    if (!client || !wgInbound || !isWireguardClient(client)) return '';
-    return buildClientTunnelConfig(client, wgInbound, window.location.hostname, subSettings?.publicHost ?? '');
-  }, [client, wgInbound, subSettings?.publicHost]);
-  const wgConfigLabel = useMemo(() => clientTunnelConfigLabel(wgInbound), [wgInbound]);
+  const tunnelConfigs = useMemo(() => {
+    if (!client || !isWireguardClient(client)) return [];
+    return findTunnelInbounds(client, inboundsById).map((inbound) => ({
+      id: inbound.id,
+      label: clientTunnelConfigLabel(inbound),
+      text: buildClientTunnelConfig(client, inbound, window.location.hostname, subSettings?.publicHost ?? ''),
+    })).filter((item) => item.text.length > 0);
+  }, [client, inboundsById, subSettings?.publicHost]);
 
-  const hasAnything = !!subLink || !!subJsonLink || !!wgConfigText || links.length > 0;
+  const hasAnything = !!subLink || !!subJsonLink || tunnelConfigs.length > 0 || links.length > 0;
 
   useEffect(() => {
     if (!open || !client?.subId) {
@@ -128,21 +130,21 @@ export default function ClientQrModal({
         ),
       });
     });
-    if (wgConfigText) {
+    tunnelConfigs.forEach((cfg) => {
       out.push({
-        key: 'wg-config',
-        label: <Tag color="cyan" style={{ margin: 0 }}>{wgConfigLabel}</Tag>,
+        key: `tunnel-config-${cfg.id}`,
+        label: <Tag color="cyan" style={{ margin: 0 }}>{cfg.label}</Tag>,
         children: (
           <QrPanel
-            value={wgConfigText}
+            value={cfg.text}
             remark={client?.email || 'peer'}
-            downloadName={`${client?.email || 'peer'}.conf`}
+            downloadName={`${client?.email || 'peer'}-${cfg.label.toLowerCase().replace(/\s+/g, '-')}.conf`}
           />
         ),
       });
-    }
+    });
     return out;
-  }, [subLink, subJsonLink, wgConfigText, wgConfigLabel, links, client?.email, t]);
+  }, [subLink, subJsonLink, tunnelConfigs, links, client?.email, t]);
 
   useEffect(() => {
     if (!open) {

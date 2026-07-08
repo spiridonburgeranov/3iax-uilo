@@ -54,3 +54,33 @@
 .index-page .ip-visible .ant-statistic-content-value {
   filter: none;
 }
+
+.awg-peer-list {
+  max-width: min(420px, 80vw);
+  max-height: 360px;
+  overflow: auto;
+}
+
+.awg-peer-row {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+}
+
+.awg-peer-row:last-child {
+  border-bottom: 0;
+}
+
+.awg-peer-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.awg-peer-meta {
+  margin-top: 3px;
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

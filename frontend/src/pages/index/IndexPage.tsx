@@ -128,6 +128,53 @@ export default function IndexPage() {
     await refresh();
   }, [refresh]);
 
+  const findAwgInbound = useCallback(async () => {
+    const msg = await HttpUtil.get('/panel/api/inbounds/list', undefined, { silent: true });
+    const list = Array.isArray(msg?.obj) ? msg.obj as { id?: number; protocol?: string }[] : [];
+    const inbound = list.find((row) => row.protocol === 'amneziawg' && typeof row.id === 'number');
+    if (!inbound?.id) {
+      messageApi.error('AmneziaWG inbound not found');
+      return 0;
+    }
+    return inbound.id;
+  }, [messageApi]);
+
+  const setAwgEnabled = useCallback(async (enable: boolean) => {
+    const id = await findAwgInbound();
+    if (!id) return false;
+    const msg = await HttpUtil.post(`/panel/api/inbounds/setEnable/${id}`, { enable });
+    await refresh();
+    return !!msg?.success;
+  }, [findAwgInbound, refresh]);
+
+  const startAwg = useCallback(async () => {
+    setBusy({ busy: true, tip: 'Starting AmneziaWG...' });
+    try {
+      await setAwgEnabled(true);
+    } finally {
+      setBusy({ busy: false });
+    }
+  }, [setAwgEnabled, setBusy]);
+
+  const stopAwg = useCallback(async () => {
+    setBusy({ busy: true, tip: 'Stopping AmneziaWG...' });
+    try {
+      await setAwgEnabled(false);
+    } finally {
+      setBusy({ busy: false });
+    }
+  }, [setAwgEnabled, setBusy]);
+
+  const restartAwg = useCallback(async () => {
+    setBusy({ busy: true, tip: 'Restarting AmneziaWG...' });
+    try {
+      const stopped = await setAwgEnabled(false);
+      if (stopped) await setAwgEnabled(true);
+    } finally {
+      setBusy({ busy: false });
+    }
+  }, [setAwgEnabled, setBusy]);
+
   function openPanelVersion() {
     setPanelUpdateOpen(true);
   }
@@ -210,7 +257,13 @@ export default function IndexPage() {
                   </Col>
 
                   <Col xs={24} lg={12}>
-                    <AwgStatusCard status={status} isMobile={isMobile} />
+                    <AwgStatusCard
+                      status={status}
+                      isMobile={isMobile}
+                      onStartAwg={startAwg}
+                      onStopAwg={stopAwg}
+                      onRestartAwg={restartAwg}
+                    />
                   </Col>
 
                   <Col xs={24} lg={12}>
