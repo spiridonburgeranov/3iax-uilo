@@ -83,4 +83,34 @@ describe('wireguard multi-client link/config fan-out', () => {
     expect(links).toHaveLength(1);
     expect(links[0]).toContain('address=10.0.0.9%2F32');
   });
+
+  it('emits AmneziaWG app config defaults for amneziawg clients', () => {
+    const inbound = InboundSchema.parse({
+      id: 92,
+      remark: 'awg-mc',
+      port: 51820,
+      protocol: 'amneziawg',
+      settings: {
+        mtu: 1420,
+        secretKey: 'iJ2cBkrSGqRwIfYIDIxk7hr5RXfdR93MfJUL7yqkkH8=',
+        peers: [],
+        clients: [
+          {
+            email: 'alice',
+            privateKey: 'QGVlb2dXc1ZTWGw0ZXBzZndsWmtMaUM5MUlNYjBHWFdYbz0=',
+            publicKey: 'DGSYIcEKAUkA7HhzGSjxLZuV67BR3LeyU0BMLJzNVHQ=',
+            allowedIPs: ['10.66.66.2/32'],
+          },
+        ],
+        s1: 0,
+        s2: 0,
+      },
+    });
+    const out = genWireguardConfigs({ inbound, remark: 'awg-mc', fallbackHostname: 'awg.example.test' });
+    expect(out).toContain('DNS = 1.1.1.1,2606:4700:4700::1111');
+    expect(out).toContain('Jc = 4');
+    expect(out).toContain('S1 = 0');
+    expect(out.indexOf('Endpoint = awg.example.test:51820')).toBeLessThan(out.indexOf('AllowedIPs = 0.0.0.0/0, ::/0'));
+    expect(out).toContain('PersistentKeepalive = 25');
+  });
 });

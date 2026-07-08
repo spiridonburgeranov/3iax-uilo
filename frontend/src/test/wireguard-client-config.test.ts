@@ -116,4 +116,25 @@ describe('buildWireguardClientConfig', () => {
     expect(cfg).toContain('H4 = 4');
     expect(cfg).toContain('Endpoint = awg.example.com:51820');
   });
+
+  it('emits AmneziaWG app-friendly peer ordering and default keepalive', () => {
+    const cfg = buildWireguardClientConfig(
+      { ...client, keepAlive: undefined },
+      {
+        ...inbound,
+        protocol: 'amneziawg',
+        wgDns: undefined,
+        awgS1: 0,
+        awgS2: 0,
+      },
+      'awg.example.com',
+      '',
+    );
+    expect(cfg).toContain('DNS = 1.1.1.1,2606:4700:4700::1111');
+    expect(cfg).toContain('Jc = 4');
+    expect(cfg).toContain('S1 = 0');
+    expect(cfg.indexOf('PresharedKey =')).toBeLessThan(cfg.indexOf('Endpoint = awg.example.com:51820'));
+    expect(cfg.indexOf('Endpoint = awg.example.com:51820')).toBeLessThan(cfg.indexOf('AllowedIPs = 0.0.0.0/0, ::/0'));
+    expect(cfg).toContain('PersistentKeepalive = 25');
+  });
 });

@@ -25,26 +25,27 @@ export function buildWireguardClientConfig(
   const endpointHost = resolveShareHost(inbound ?? {}, inbound?.nodeAddress ?? '', preferPublicHost(host, publicHost));
   const address = client.allowedIPs || '10.0.0.2/32';
   const endpoint = `${endpointHost}:${inbound?.port || ''}`;
+  const isAmneziaWG = inbound?.protocol === 'amneziawg';
   const inboundName = inbound ? formatInboundLabel(inbound.tag, inbound.remark) : '';
   const remark = [inboundName, client.email, client.comment].filter(Boolean).join(' - ');
   const lines = [
     '[Interface]',
     `PrivateKey = ${client.privateKey || client.password || ''}`,
     `Address = ${address}`,
-    `DNS = ${inbound?.wgDns || '1.1.1.1, 1.0.0.1'}`,
+    `DNS = ${inbound?.wgDns || (isAmneziaWG ? '1.1.1.1,2606:4700:4700::1111' : '1.1.1.1, 1.0.0.1')}`,
   ];
   if (inbound?.wgMtu && inbound.wgMtu > 0) lines.push(`MTU = ${inbound.wgMtu}`);
-  if (inbound?.protocol === 'amneziawg') {
+  if (isAmneziaWG) {
     const awgParams = [
-      ['Jc', inbound.awgJc],
-      ['Jmin', inbound.awgJmin],
-      ['Jmax', inbound.awgJmax],
-      ['S1', inbound.awgS1],
-      ['S2', inbound.awgS2],
-      ['H1', inbound.awgH1],
-      ['H2', inbound.awgH2],
-      ['H3', inbound.awgH3],
-      ['H4', inbound.awgH4],
+      ['Jc', inbound.awgJc ?? 4],
+      ['Jmin', inbound.awgJmin ?? 50],
+      ['Jmax', inbound.awgJmax ?? 1000],
+      ['S1', inbound.awgS1 ?? 0],
+      ['S2', inbound.awgS2 ?? 0],
+      ['H1', inbound.awgH1 ?? 1],
+      ['H2', inbound.awgH2 ?? 2],
+      ['H3', inbound.awgH3 ?? 3],
+      ['H4', inbound.awgH4 ?? 4],
     ] as const;
     for (const [key, value] of awgParams) {
       if (typeof value === 'number' && value >= 0) lines.push(`${key} = ${value}`);
@@ -54,7 +55,8 @@ export function buildWireguardClientConfig(
   if (remark) lines.push(`# ${remark}`);
   lines.push('[Peer]', `PublicKey = ${inbound?.wgPublicKey || ''}`);
   if (client.preSharedKey) lines.push(`PresharedKey = ${client.preSharedKey}`);
-  lines.push('AllowedIPs = 0.0.0.0/0, ::/0', `Endpoint = ${endpoint}`);
-  if (client.keepAlive && client.keepAlive > 0) lines.push(`PersistentKeepalive = ${client.keepAlive}`);
+  lines.push(`Endpoint = ${endpoint}`, 'AllowedIPs = 0.0.0.0/0, ::/0');
+  const keepAlive = client.keepAlive && client.keepAlive > 0 ? client.keepAlive : (isAmneziaWG ? 25 : 0);
+  if (keepAlive > 0) lines.push(`PersistentKeepalive = ${keepAlive}`);
   return lines.join('\n');
 }
