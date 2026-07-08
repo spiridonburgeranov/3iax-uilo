@@ -48,6 +48,7 @@ import { LazyMount } from '@/components/utility';
 import { setMessageInstance } from '@/utils/messageBus';
 import StatusCard from './StatusCard';
 import XrayStatusCard from './XrayStatusCard';
+import AwgStatusCard from './AwgStatusCard';
 import type { PanelUpdateInfo } from './PanelUpdateModal';
 const JsonEditor = lazy(() => import('@/components/form/JsonEditor'));
 const PanelUpdateModal = lazy(() => import('./PanelUpdateModal'));
@@ -206,6 +207,10 @@ export default function IndexPage() {
                       onOpenLogs={() => setLogsOpen(true)}
                       onOpenVersionSwitch={() => setVersionOpen(true)}
                     />
+                  </Col>
+
+                  <Col xs={24} lg={12}>
+                    <AwgStatusCard status={status} isMobile={isMobile} />
                   </Col>
 
                   <Col xs={24} lg={12}>

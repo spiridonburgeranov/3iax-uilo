@@ -33,6 +33,12 @@ export const XrayInfoSchema = z.object({
   color: z.string(),
 }).partial();
 
+export const AwgInfoSchema = z.object({
+  installed: z.boolean(),
+  running: z.boolean(),
+  version: z.string(),
+}).partial();
+
 export const StatusSchema = z.object({
   cpu: z.number().optional(),
   cpuCores: z.number().optional(),
@@ -51,6 +57,7 @@ export const StatusSchema = z.object({
   appUptime: z.number().optional(),
   appStats: AppStatsSchema.optional(),
   xray: XrayInfoSchema.optional(),
+  awg: AwgInfoSchema.optional(),
 });
 
 export type StatusInput = z.infer<typeof StatusSchema>;

@@ -56,6 +56,12 @@ export interface XrayInfo {
   color: string;
 }
 
+export interface AwgInfo {
+  installed: boolean;
+  running: boolean;
+  version: string;
+}
+
 interface StatusInput {
   cpu?: number;
   cpuCores?: number;
@@ -74,6 +80,7 @@ interface StatusInput {
   appUptime?: number;
   appStats?: AppStats;
   xray?: Partial<XrayInfo>;
+  awg?: Partial<AwgInfo>;
 }
 
 export class Status {
@@ -94,6 +101,7 @@ export class Status {
   appUptime = 0;
   appStats: AppStats = { threads: 0, mem: 0, uptime: 0 };
   xray: XrayInfo = { state: 'stop', errorMsg: '', version: '', color: '' };
+  awg: AwgInfo = { installed: false, running: false, version: 'unknown' };
 
   constructor(data?: StatusInput | null) {
     if (data == null) return;
@@ -116,5 +124,6 @@ export class Status {
     this.appStats = data.appStats ?? this.appStats;
     this.xray = { ...this.xray, ...(data.xray || {}) };
     this.xray.color = XRAY_STATE_COLORS[this.xray.state] ?? 'gray';
+    this.awg = { ...this.awg, ...(data.awg || {}) };
   }
 }

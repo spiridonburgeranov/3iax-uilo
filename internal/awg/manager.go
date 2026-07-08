@@ -63,6 +63,28 @@ func IsInstalled() bool {
 	return err1 == nil && err2 == nil
 }
 
+func Version() string {
+	out, err := exec.Command("awg", "--version").CombinedOutput()
+	if err != nil {
+		out, err = exec.Command("awg", "version").CombinedOutput()
+	}
+	if err != nil {
+		return "unknown"
+	}
+	parts := strings.Fields(strings.TrimSpace(string(out)))
+	if len(parts) == 0 {
+		return "unknown"
+	}
+	return parts[len(parts)-1]
+}
+
+func IsInboundUp(inbound *model.Inbound) bool {
+	if inbound == nil {
+		return false
+	}
+	return isUp(interfaceName(inbound))
+}
+
 func ApplyInbound(inbound *model.Inbound) error {
 	if inbound == nil {
 		return nil
@@ -154,37 +176,20 @@ func buildConfig(inbound *model.Inbound) (string, error) {
 	if strings.TrimSpace(parsed.DNS) != "" {
 		lines = append(lines, "DNS = "+strings.TrimSpace(parsed.DNS))
 	}
-	if parsed.Jc > 0 {
-		lines = append(lines, fmt.Sprintf("Jc = %d", parsed.Jc))
-	}
-	if parsed.Jmin > 0 {
-		lines = append(lines, fmt.Sprintf("Jmin = %d", parsed.Jmin))
-	}
-	if parsed.Jmax > 0 {
-		lines = append(lines, fmt.Sprintf("Jmax = %d", parsed.Jmax))
-	}
-	if parsed.S1 > 0 {
-		lines = append(lines, fmt.Sprintf("S1 = %d", parsed.S1))
-	}
-	if parsed.S2 > 0 {
-		lines = append(lines, fmt.Sprintf("S2 = %d", parsed.S2))
-	}
-	if parsed.H1 > 0 {
-		lines = append(lines, fmt.Sprintf("H1 = %d", parsed.H1))
-	}
-	if parsed.H2 > 0 {
-		lines = append(lines, fmt.Sprintf("H2 = %d", parsed.H2))
-	}
-	if parsed.H3 > 0 {
-		lines = append(lines, fmt.Sprintf("H3 = %d", parsed.H3))
-	}
-	if parsed.H4 > 0 {
-		lines = append(lines, fmt.Sprintf("H4 = %d", parsed.H4))
-	}
-	if postUp := buildPostUp(&parsed, serverAddr); postUp != "" {
+	jc, jmin, jmax, s1, s2, h1, h2, h3, h4 := obfuscationParams(&parsed)
+	lines = append(lines, fmt.Sprintf("Jc = %d", jc))
+	lines = append(lines, fmt.Sprintf("Jmin = %d", jmin))
+	lines = append(lines, fmt.Sprintf("Jmax = %d", jmax))
+	lines = append(lines, fmt.Sprintf("S1 = %d", s1))
+	lines = append(lines, fmt.Sprintf("S2 = %d", s2))
+	lines = append(lines, fmt.Sprintf("H1 = %d", h1))
+	lines = append(lines, fmt.Sprintf("H2 = %d", h2))
+	lines = append(lines, fmt.Sprintf("H3 = %d", h3))
+	lines = append(lines, fmt.Sprintf("H4 = %d", h4))
+	if postUp := buildPostUp(inbound, &parsed, serverAddr); postUp != "" {
 		lines = append(lines, "PostUp = "+postUp)
 	}
-	if postDown := buildPostDown(&parsed, serverAddr); postDown != "" {
+	if postDown := buildPostDown(inbound, &parsed, serverAddr); postDown != "" {
 		lines = append(lines, "PostDown = "+postDown)
 	}
 	peers, err := collectPeers(&parsed)
@@ -208,7 +213,39 @@ func buildConfig(inbound *model.Inbound) (string, error) {
 	return strings.Join(lines, "\n") + "\n", nil
 }
 
-func buildPostUp(parsed *inboundSettings, serverAddr string) string {
+func obfuscationParams(parsed *inboundSettings) (int, int, int, int, int, int, int, int, int) {
+	jc := parsed.Jc
+	if jc <= 0 {
+		jc = 4
+	}
+	jmin := parsed.Jmin
+	if jmin <= 0 {
+		jmin = 50
+	}
+	jmax := parsed.Jmax
+	if jmax <= 0 {
+		jmax = 1000
+	}
+	h1 := parsed.H1
+	if h1 <= 0 {
+		h1 = 1
+	}
+	h2 := parsed.H2
+	if h2 <= 0 {
+		h2 = 2
+	}
+	h3 := parsed.H3
+	if h3 <= 0 {
+		h3 = 3
+	}
+	h4 := parsed.H4
+	if h4 <= 0 {
+		h4 = 4
+	}
+	return jc, jmin, jmax, parsed.S1, parsed.S2, h1, h2, h3, h4
+}
+
+func buildPostUp(inbound *model.Inbound, parsed *inboundSettings, serverAddr string) string {
 	if strings.TrimSpace(parsed.PostUp) != "" {
 		return strings.TrimSpace(parsed.PostUp)
 	}
@@ -220,13 +257,16 @@ func buildPostUp(parsed *inboundSettings, serverAddr string) string {
 	if prefix == "" {
 		return "sysctl -w net.ipv4.ip_forward=1"
 	}
+	name := interfaceName(inbound)
 	return strings.Join([]string{
-		"sysctl -w net.ipv4.ip_forward=1",
 		fmt.Sprintf("iptables -t nat -A POSTROUTING -s %s -o %s -j MASQUERADE", prefix, iface),
+		fmt.Sprintf("iptables -A FORWARD -i %s -j ACCEPT", name),
+		fmt.Sprintf("iptables -A FORWARD -o %s -j ACCEPT", name),
+		"sysctl -w net.ipv4.ip_forward=1",
 	}, "; ")
 }
 
-func buildPostDown(parsed *inboundSettings, serverAddr string) string {
+func buildPostDown(inbound *model.Inbound, parsed *inboundSettings, serverAddr string) string {
 	if strings.TrimSpace(parsed.PostDown) != "" {
 		return strings.TrimSpace(parsed.PostDown)
 	}
@@ -238,7 +278,12 @@ func buildPostDown(parsed *inboundSettings, serverAddr string) string {
 	if prefix == "" {
 		return ""
 	}
-	return fmt.Sprintf("iptables -t nat -D POSTROUTING -s %s -o %s -j MASQUERADE", prefix, iface)
+	name := interfaceName(inbound)
+	return strings.Join([]string{
+		fmt.Sprintf("iptables -t nat -D POSTROUTING -s %s -o %s -j MASQUERADE", prefix, iface),
+		fmt.Sprintf("iptables -D FORWARD -i %s -j ACCEPT", name),
+		fmt.Sprintf("iptables -D FORWARD -o %s -j ACCEPT", name),
+	}, "; ")
 }
 
 func serverIPv4Prefix(serverAddr string) string {

@@ -27,8 +27,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mhsanaei/3x-ui/v3/internal/awg"
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/sys"
@@ -87,6 +89,11 @@ type Status struct {
 		ErrorMsg string       `json:"errorMsg"`
 		Version  string       `json:"version"`
 	} `json:"xray"`
+	Awg struct {
+		Installed bool   `json:"installed"`
+		Running   bool   `json:"running"`
+		Version   string `json:"version"`
+	} `json:"awg"`
 	PanelVersion string    `json:"panelVersion"`
 	PanelGuid    string    `json:"panelGuid"`
 	Uptime       uint64    `json:"uptime"`
@@ -609,6 +616,20 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 		status.Xray.ErrorMsg = s.xrayService.GetXrayResult()
 	}
 	status.Xray.Version = s.xrayService.GetXrayVersion()
+	status.Awg.Installed = awg.IsInstalled()
+	status.Awg.Version = "unknown"
+	if status.Awg.Installed {
+		status.Awg.Version = awg.Version()
+		var inbounds []*model.Inbound
+		if err := database.GetDB().Where("protocol = ? AND enable = ? AND node_id IS NULL", model.AmneziaWG, true).Find(&inbounds).Error; err == nil {
+			for _, inbound := range inbounds {
+				if awg.IsInboundUp(inbound) {
+					status.Awg.Running = true
+					break
+				}
+			}
+		}
+	}
 	status.PanelVersion = config.GetPanelVersion()
 	if guid, err := s.settingService.GetPanelGuid(); err == nil {
 		status.PanelGuid = guid
