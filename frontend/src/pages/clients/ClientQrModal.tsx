@@ -5,6 +5,9 @@ import { HttpUtil } from '@/utils';
 import { isPostQuantumLink } from '@/lib/xray/inbound-link';
 import { LinkTags, linkMetaText, parseLinkParts } from '@/lib/xray/link-label';
 import { QrPanel } from '@/pages/inbounds/qr';
+import AmneziaSharePanel from '@/components/clients/AmneziaSharePanel';
+import { amneziaNativeTabLabel } from '@/lib/amnezia/share';
+import { useAmneziaClientShares } from '@/hooks/useAmneziaClientShares';
 import type { ClientRecord, InboundOption } from '@/hooks/useClients';
 import { useTunnelClientConfigs } from './useTunnelClientConfigs';
 
@@ -59,8 +62,14 @@ export default function ClientQrModal({
     inboundsById,
     subSettings?.publicHost ?? '',
   );
+  const { amneziaShares, amneziaSharesLoading } = useAmneziaClientShares(
+    open,
+    client,
+    inboundsById,
+    subSettings?.publicHost ?? '',
+  );
 
-  const hasAnything = !!subLink || !!subJsonLink || tunnelConfigs.length > 0 || links.length > 0;
+  const hasAnything = !!subLink || !!subJsonLink || tunnelConfigs.length > 0 || links.length > 0 || amneziaShares.length > 0;
 
   useEffect(() => {
     if (!open || !client?.subId) {
@@ -126,19 +135,38 @@ export default function ClientQrModal({
     tunnelConfigs.forEach((cfg) => {
       out.push({
         key: `tunnel-config-${cfg.id}`,
-        label: <Tag color="cyan" style={{ margin: 0 }}>{cfg.label}</Tag>,
+        label: <Tag color={cfg.protocol === 'amneziawg' ? 'cyan' : 'gold'} style={{ margin: 0 }}>{cfg.label}</Tag>,
         children: (
-          <QrPanel
-            value={cfg.text}
-            remark={client?.email || 'peer'}
-            downloadName={`${client?.email || 'peer'}-${cfg.label.toLowerCase().replace(/\s+/g, '-')}.conf`}
-            showQr={false}
+          <AmneziaSharePanel
+            label={cfg.label}
+            nativeValue={cfg.text}
+            vpnUri={cfg.vpnUri}
+            fileName={`${client?.email || 'peer'}-${cfg.label.toLowerCase().replace(/\s+/g, '-')}.conf`}
+            qrRemark={client?.email || 'peer'}
+            nativeTabLabel={amneziaNativeTabLabel(cfg.protocol)}
+          />
+        ),
+      });
+    });
+    amneziaShares.forEach((share) => {
+      if (share.protocol === 'wireguard' || share.protocol === 'amneziawg') return;
+      out.push({
+        key: `amnezia-share-${share.inboundId}`,
+        label: <Tag color="purple" style={{ margin: 0 }}>{share.label}</Tag>,
+        children: (
+          <AmneziaSharePanel
+            label={share.label}
+            nativeValue={share.nativeValue}
+            vpnUri={share.vpnUri}
+            qrRemark={client?.email || share.label}
+            nativeTabLabel={amneziaNativeTabLabel(share.protocol)}
+            nativeAsLink={share.nativeAsLink}
           />
         ),
       });
     });
     return out;
-  }, [subLink, subJsonLink, tunnelConfigs, links, client?.email, t]);
+  }, [subLink, subJsonLink, tunnelConfigs, amneziaShares, links, client?.email, t]);
 
   useEffect(() => {
     if (!open) {
@@ -153,12 +181,12 @@ export default function ClientQrModal({
       open={open}
       title={client ? `${t('qrCode')} — ${client.email}` : t('qrCode')}
       footer={null}
-      width={520}
+      width={600}
       centered
       onCancel={() => onOpenChange(false)}
     >
-      <Spin spinning={loading || tunnelConfigsLoading}>
-        {!hasAnything && !loading && !tunnelConfigsLoading && (
+      <Spin spinning={loading || tunnelConfigsLoading || amneziaSharesLoading}>
+        {!hasAnything && !loading && !tunnelConfigsLoading && !amneziaSharesLoading && (
           <div style={{ padding: 24, textAlign: 'center', opacity: 0.6 }}>
             {!client?.subId && tunnelConfigs.length === 0
               ? t('pages.clients.noSubId')

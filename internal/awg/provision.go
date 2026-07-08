@@ -37,6 +37,11 @@ type ProvisionPlan struct {
 	H2            string
 	H3            string
 	H4            string
+	I1            string
+	I2            string
+	I3            string
+	I4            string
+	I5            string
 }
 
 type ResourceSnapshot struct {
@@ -50,13 +55,13 @@ func BuildProvisionPlan(snapshot ResourceSnapshot) (ProvisionPlan, error) {
 	if err != nil {
 		return ProvisionPlan{}, err
 	}
-	iface := pickInterfaceName(port, snapshot.interfaceNames)
+	iface := pickInterfaceName(snapshot.interfaceNames)
 	serverAddr, pool := pickSubnet(snapshot.subnetBases)
 	priv, pub, err := GenerateKeyPair()
 	if err != nil {
 		return ProvisionPlan{}, err
 	}
-	obf := randomObfuscation()
+	obf := GenerateObfuscationParams()
 	return ProvisionPlan{
 		InterfaceName: iface,
 		ListenPort:    port,
@@ -66,17 +71,22 @@ func BuildProvisionPlan(snapshot ResourceSnapshot) (ProvisionPlan, error) {
 		PublicKey:     pub,
 		MTU:           1420,
 		DNS:           "1.1.1.1,2606:4700:4700::1111",
-		Jc:            obf.jc,
-		Jmin:          obf.jmin,
-		Jmax:          obf.jmax,
-		S1:            obf.s1,
-		S2:            obf.s2,
-		S3:            obf.s3,
-		S4:            obf.s4,
-		H1:            obf.h1,
-		H2:            obf.h2,
-		H3:            obf.h3,
-		H4:            obf.h4,
+		Jc:            obf.Jc,
+		Jmin:          obf.Jmin,
+		Jmax:          obf.Jmax,
+		S1:            obf.S1,
+		S2:            obf.S2,
+		S3:            obf.S3,
+		S4:            obf.S4,
+		H1:            obf.H1,
+		H2:            obf.H2,
+		H3:            obf.H3,
+		H4:            obf.H4,
+		I1:            obf.I1,
+		I2:            obf.I2,
+		I3:            obf.I3,
+		I4:            obf.I4,
+		I5:            obf.I5,
 	}, nil
 }
 
@@ -106,24 +116,18 @@ func SnapshotFromNamesPortsSubnets(names []string, ports []int, subnets []string
 }
 
 func InterfaceNameForPort(port int, used map[string]struct{}) string {
-	return pickInterfaceName(port, used)
+	_ = port
+	return pickInterfaceName(used)
 }
 
-func pickInterfaceName(port int, used map[string]struct{}) string {
-	if _, taken := used["awg0"]; !taken {
-		return "awg0"
-	}
-	name := fmt.Sprintf("awg_in_%d_ud", port)
-	if _, taken := used[name]; !taken {
-		return name
-	}
-	for idx := 2; idx < 1000; idx++ {
-		candidate := fmt.Sprintf("%s_%d", name, idx)
+func pickInterfaceName(used map[string]struct{}) string {
+	for idx := 0; idx < 10_000; idx++ {
+		candidate := fmt.Sprintf("awg%d", idx)
 		if _, taken := used[candidate]; !taken {
 			return candidate
 		}
 	}
-	return name
+	return "awg_panel"
 }
 
 func pickListenPort(blocked map[int]struct{}) (int, error) {
@@ -197,47 +201,24 @@ func subnetBase(value string) string {
 	return ""
 }
 
-type obfuscationSeed struct {
-	jc, jmin, jmax       int
-	s1, s2, s3, s4       int
-	h1, h2, h3, h4       string
-}
-
-func randomObfuscation() obfuscationSeed {
-	jc := 3 + random.Num(6)
-	jmin := 50 + random.Num(80)
-	jmax := jmin + 100 + random.Num(200)
-	if jmax > 1024 {
-		jmax = 1024
-	}
-	return obfuscationSeed{
-		jc:   jc,
-		jmin: jmin,
-		jmax: jmax,
-		s1:   10 + random.Num(20),
-		s2:   20 + random.Num(20),
-		s3:   30 + random.Num(20),
-		s4:   10 + random.Num(20),
-		h1:   randomDigits(1 + random.Num(3)),
-		h2:   randomDigits(1 + random.Num(3)),
-		h3:   randomDigits(1 + random.Num(3)),
-		h4:   randomDigits(1 + random.Num(3)),
-	}
-}
-
-func randomDigits(length int) string {
-	if length <= 0 {
-		length = 1
-	}
-	out := make([]byte, length)
-	for i := range out {
-		out[i] = byte('0' + random.Num(10))
-	}
-	return string(out)
-}
-
 func SubnetBaseFromAddress(address string) string {
 	return subnetBase(address)
+}
+
+func ParseInterfaceIndex(name string) int {
+	name = strings.TrimSpace(name)
+	if !strings.HasPrefix(name, "awg") {
+		return -1
+	}
+	suffix := strings.TrimPrefix(name, "awg")
+	if suffix == "" {
+		return 0
+	}
+	idx, err := strconv.Atoi(suffix)
+	if err != nil || idx < 0 {
+		return -1
+	}
+	return idx
 }
 
 func ParseInterfacePort(name string) int {

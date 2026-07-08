@@ -2461,6 +2461,10 @@
       "description": "A separate HTTP/HTTPS server that serves proxy subscription links (standard, JSON, and Clash) to clients. The server listens on its own port (default 10882) and is configured in Settings → Subscription. Paths are configurable; defaults are shown below. All subscription endpoints set response headers for client apps to read traffic/expiry info."
     },
     {
+      "name": "AWGv2",
+      "description": "Manage AmneziaWGv2 interfaces through awg/awg-quick. New inbounds are auto-provisioned like Amnezia core; each inbound maps to one kernel interface and config file."
+    },
+    {
       "name": "WebSocket",
       "description": "Real-time status updates via WebSocket. Connect once at <code>ws://<panel>/ws</code> to receive a stream of JSON messages without polling. Requires an authenticated session cookie (Bearer token auth is not supported). Each message has a <code>type</code> field that identifies the payload shape."
     }
@@ -10394,6 +10398,447 @@
             "in": "path",
             "required": true,
             "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/awg/provision/new": {
+      "get": {
+        "tags": [
+          "AWGv2"
+        ],
+        "summary": "Generate the next AWGv2 interface plan (awgN name, UDP port, subnet, keys, H/S/J/I obfuscation).",
+        "operationId": "get_panel_api_awg_provision_new",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/awg/discovered": {
+      "get": {
+        "tags": [
+          "AWGv2"
+        ],
+        "summary": "List discovered AWG interfaces from config files and the running awg runtime.",
+        "operationId": "get_panel_api_awg_discovered",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/awg/discovered/{name}/template": {
+      "get": {
+        "tags": [
+          "AWGv2"
+        ],
+        "summary": "Build an amneziawg inbound form template from a discovered interface.",
+        "operationId": "get_panel_api_awg_discovered_name_template",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "description": "AWG interface name, e.g. awg0.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/awg/scan/import": {
+      "post": {
+        "tags": [
+          "AWGv2"
+        ],
+        "summary": "Import discovered interfaces into amneziawg inbounds.",
+        "operationId": "post_panel_api_awg_scan_import",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "force": false,
+                "names": [
+                  "awg0"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/awg/inbounds": {
+      "get": {
+        "tags": [
+          "AWGv2"
+        ],
+        "summary": "List local amneziawg inbounds with runtime peer stats.",
+        "operationId": "get_panel_api_awg_inbounds",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/awg/restore": {
+      "post": {
+        "tags": [
+          "AWGv2"
+        ],
+        "summary": "Restore all enabled amneziawg inbounds through awg-quick.",
+        "operationId": "post_panel_api_awg_restore",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/awg/toggle": {
+      "post": {
+        "tags": [
+          "AWGv2"
+        ],
+        "summary": "Start or stop all local amneziawg inbounds.",
+        "operationId": "post_panel_api_awg_toggle",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "enable": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/awg/server/toggle": {
+      "post": {
+        "tags": [
+          "AWGv2"
+        ],
+        "summary": "Alias for /panel/api/awg/toggle.",
+        "operationId": "post_panel_api_awg_server_toggle",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              },
+              "example": {
+                "enable": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/awg/server/status": {
+      "get": {
+        "tags": [
+          "AWGv2"
+        ],
+        "summary": "Return AWG runtime availability, aggregate peer counts, and per-inbound status.",
+        "operationId": "get_panel_api_awg_server_status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/awg/client/{inboundId}/{email}/config": {
+      "get": {
+        "tags": [
+          "AWGv2"
+        ],
+        "summary": "Return an Amnezia app-ready client config for an inbound client.",
+        "operationId": "get_panel_api_awg_client_inboundId_email_config",
+        "parameters": [
+          {
+            "name": "inboundId",
+            "in": "path",
+            "required": true,
+            "description": "AmneziaWG inbound ID.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "email",
+            "in": "path",
+            "required": true,
+            "description": "Client email.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endpoint",
+            "in": "query",
+            "required": true,
+            "description": "Optional endpoint host override.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/awg/client/{inboundId}/{email}/vpnuri": {
+      "get": {
+        "tags": [
+          "AWGv2"
+        ],
+        "summary": "Return a vpn:// import URI for the Amnezia VPN mobile/desktop app.",
+        "operationId": "get_panel_api_awg_client_inboundId_email_vpnuri",
+        "parameters": [
+          {
+            "name": "inboundId",
+            "in": "path",
+            "required": true,
+            "description": "AmneziaWG inbound ID.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "email",
+            "in": "path",
+            "required": true,
+            "description": "Client email.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endpoint",
+            "in": "query",
+            "required": true,
+            "description": "Optional endpoint host:port override.",
             "schema": {
               "type": "string"
             }

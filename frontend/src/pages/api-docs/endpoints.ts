@@ -892,6 +892,17 @@ export const sections: readonly Section[] = [
         response:
           '{\n  "success": true,\n  "obj": [\n    "vless://uuid@host:443?...#user1"\n  ]\n}',
       },
+      {
+        method: 'GET',
+        path: '/panel/api/clients/inbound/:inboundId/:email/vpnuri',
+        summary: 'Return a vpn:// import URI for the Amnezia VPN mobile/desktop app.',
+        params: [
+          { name: 'inboundId', in: 'path', type: 'integer', desc: 'Inbound ID attached to the client.' },
+          { name: 'email', in: 'path', type: 'string', desc: 'Client email on that inbound.' },
+          { name: 'endpoint', in: 'query', type: 'string', desc: 'Public host:port override for the client endpoint.' },
+        ],
+        response: '{\n  "success": true,\n  "obj": "vpn://..."\n}',
+      },
     ],
   },
 
@@ -1477,7 +1488,7 @@ export const sections: readonly Section[] = [
       {
         method: 'GET',
         path: '/panel/api/awg/provision/new',
-        summary: 'Generate the next AWGv2 interface plan (name, UDP port, subnet, keys, obfuscation).',
+        summary: 'Generate the next AWGv2 interface plan (awgN name, UDP port, subnet, keys, H/S/J/I obfuscation).',
       },
       {
         method: 'GET',
@@ -1533,6 +1544,16 @@ export const sections: readonly Section[] = [
           { name: 'inboundId', in: 'path', type: 'integer', desc: 'AmneziaWG inbound ID.' },
           { name: 'email', in: 'path', type: 'string', desc: 'Client email.' },
           { name: 'endpoint', in: 'query', type: 'string', desc: 'Optional endpoint host override.' },
+        ],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/awg/client/:inboundId/:email/vpnuri',
+        summary: 'Return a vpn:// import URI for the Amnezia VPN mobile/desktop app.',
+        params: [
+          { name: 'inboundId', in: 'path', type: 'integer', desc: 'AmneziaWG inbound ID.' },
+          { name: 'email', in: 'path', type: 'string', desc: 'Client email.' },
+          { name: 'endpoint', in: 'query', type: 'string', desc: 'Optional endpoint host:port override.' },
         ],
       },
     ],

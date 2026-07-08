@@ -2,10 +2,10 @@ import { lazy, Suspense } from 'react';
 import { createBrowserRouter, type RouteObject } from 'react-router-dom';
 
 import PanelLayout from '@/layouts/PanelLayout';
+import AwgPage from '@/pages/awg/AwgPage';
 
 const IndexPage = lazy(() => import('@/pages/index/IndexPage'));
 const InboundsPage = lazy(() => import('@/pages/inbounds/InboundsPage'));
-const AwgPage = lazy(() => import('@/pages/awg/AwgPage'));
 const ClientsPage = lazy(() => import('@/pages/clients/ClientsPage'));
 const GroupsPage = lazy(() => import('@/pages/groups/GroupsPage'));
 const NodesPage = lazy(() => import('@/pages/nodes/NodesPage'));
@@ -25,7 +25,7 @@ const routes: RouteObject[] = [
     children: [
       { index: true, element: withSuspense(<IndexPage />) },
       { path: 'inbounds', element: withSuspense(<InboundsPage />) },
-      { path: 'awg', element: withSuspense(<AwgPage />) },
+      { path: 'awg', element: <AwgPage /> },
       { path: 'clients', element: withSuspense(<ClientsPage />) },
       { path: 'groups', element: withSuspense(<GroupsPage />) },
       { path: 'nodes', element: withSuspense(<NodesPage />) },

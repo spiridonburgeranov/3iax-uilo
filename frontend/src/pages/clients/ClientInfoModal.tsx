@@ -11,7 +11,9 @@ import type { ClientRecord, InboundOption } from '@/hooks/useClients';
 import { isPostQuantumLink } from '@/lib/xray/inbound-link';
 import { LinkTags, linkMetaText, parseLinkParts } from '@/lib/xray/link-label';
 import { QrPanel } from '@/pages/inbounds/qr';
-import ConfigBlock from '@/components/clients/ConfigBlock';
+import AmneziaSharePanel from '@/components/clients/AmneziaSharePanel';
+import { amneziaNativeTabLabel } from '@/lib/amnezia/share';
+import { useAmneziaClientShares } from '@/hooks/useAmneziaClientShares';
 import { useTunnelClientConfigs } from './useTunnelClientConfigs';
 import './ClientInfoModal.css';
 
@@ -138,6 +140,12 @@ export default function ClientInfoModal({
 
   const showSubscription = !!(subSettings?.enable && client?.subId);
   const { tunnelConfigs } = useTunnelClientConfigs(
+    open,
+    client,
+    inboundsById,
+    subSettings?.publicHost ?? '',
+  );
+  const { amneziaShares } = useAmneziaClientShares(
     open,
     client,
     inboundsById,
@@ -503,13 +511,31 @@ export default function ClientInfoModal({
                 {tunnelConfigs.map((cfg) => (
                   <Fragment key={cfg.id}>
                     <Divider>{cfg.label}</Divider>
-                    <ConfigBlock
+                    <AmneziaSharePanel
                       label={t('pages.clients.config')}
-                      text={cfg.text}
+                      nativeValue={cfg.text}
+                      vpnUri={cfg.vpnUri}
                       fileName={`${client.email}-${cfg.label.toLowerCase().replace(/\s+/g, '-')}.conf`}
                       qrRemark={client.email || 'peer'}
-                      showQr={false}
-                      tagColor={cfg.protocol === 'amneziawg' ? 'cyan' : 'gold'}
+                      nativeTabLabel={amneziaNativeTabLabel(cfg.protocol)}
+                    />
+                  </Fragment>
+                ))}
+              </>
+            )}
+
+            {amneziaShares.length > 0 && client && (
+              <>
+                {amneziaShares.map((share) => (
+                  <Fragment key={share.inboundId}>
+                    <Divider>{share.label}</Divider>
+                    <AmneziaSharePanel
+                      label={share.label}
+                      nativeValue={share.nativeValue}
+                      vpnUri={share.vpnUri}
+                      qrRemark={client.email || share.label}
+                      nativeTabLabel={amneziaNativeTabLabel(share.protocol)}
+                      nativeAsLink={share.nativeAsLink}
                     />
                   </Fragment>
                 ))}

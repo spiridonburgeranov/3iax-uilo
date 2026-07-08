@@ -45,9 +45,8 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
   const [loading, setLoading] = useState(false);
   const [adoptName, setAdoptName] = useState<string>();
   const [provision, setProvision] = useState<AwgProvisionResult | null>(null);
-  const port = Form.useWatch('port', form) as number | undefined;
-  const awgInterface = Form.useWatch(['settings', 'awgInterface'], form) as string | undefined;
   const serverAddress = Form.useWatch(['settings', 'address'], form) as string | undefined;
+  const obfuscationJc = Form.useWatch(['settings', 'jc'], form) as number | undefined;
 
   const pendingAdopt = useMemo(
     () => discovered.filter((item) => !item.imported),
@@ -89,16 +88,6 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
         setDiscovered(Array.isArray(msg?.obj) ? msg.obj as AwgDiscovered[] : []);
       });
   }, [loadProvision, mode]);
-
-  useEffect(() => {
-    if (mode !== 'create' || adoptName) return;
-    const iface = typeof awgInterface === 'string' ? awgInterface.trim() : '';
-    if (iface === 'awg0') return;
-    const nextPort = typeof port === 'number' ? port : 0;
-    if (nextPort > 0) {
-      form.setFieldValue(['settings', 'awgInterface'], `awg_in_${nextPort}_ud`);
-    }
-  }, [adoptName, awgInterface, form, mode, port]);
 
   async function applyTemplate(name: string) {
     setLoading(true);
@@ -144,8 +133,9 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
           message="AWGv2 auto-provision"
           description={(
             <>
-              The panel picks the next free Amnezia interface name, UDP port, subnet, keys, and obfuscation
-              parameters. Only the inbound remark is required; everything else can be tuned below before save.
+              The panel assigns the next free kernel interface (awg0, awg1, …), a random UDP port,
+              subnet, keys, and full AWG 2.0 obfuscation (H1–H4 ranges, S1–S4, Jc/Jmin/Jmax, CPS I1–I5).
+              Only the inbound remark is required before save.
             </>
           )}
         />
@@ -162,6 +152,7 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
           <Descriptions.Item label="Interface">{provision.interfaceName}</Descriptions.Item>
           <Descriptions.Item label="UDP port">{provision.port}</Descriptions.Item>
           <Descriptions.Item label="Server address">{serverAddress || provision.settings.address as string}</Descriptions.Item>
+          <Descriptions.Item label="Obfuscation">Jc={String(obfuscationJc ?? provision.settings.jc)} · AWG 2.0 CPS enabled</Descriptions.Item>
           <Descriptions.Item label="Config file">{provision.configPath}</Descriptions.Item>
           <Descriptions.Item label="Public key">{provision.publicKey}</Descriptions.Item>
         </Descriptions>
@@ -200,9 +191,9 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
                 <Form.Item
                   name={['settings', 'awgInterface']}
                   label="Kernel interface"
-                  extra="awg0 for the first tunnel, awg_in_{port}_ud for the next ones"
+                  extra="Sequential names awg0, awg1, awg2 — assigned automatically on create"
                 >
-                  <Input placeholder="awg0" />
+                  <Input placeholder="awg0" disabled={mode === 'create'} />
                 </Form.Item>
                 <Form.Item name="port" label="Listen port (UDP)" hidden={mode === 'create'}>
                   <InputNumber min={1} max={65535} style={{ width: '100%' }} />
@@ -221,9 +212,16 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
           },
           {
             key: 'obfuscation',
-            label: 'AWGv2 obfuscation',
+            label: 'AWGv2 obfuscation (auto-generated)',
             children: (
               <>
+                <Alert
+                  type="success"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message="Random AWG 2.0 profile"
+                  description="H1–H4 are non-overlapping header ranges, S1–S4 unique padding, Jc junk train, I1–I5 CPS chain. Regenerate plan to roll new values."
+                />
                 <Row gutter={12}>
                   <Col xs={24} md={8}>
                     <Form.Item name={['settings', 'jc']} label="Jc">

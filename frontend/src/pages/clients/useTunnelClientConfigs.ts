@@ -5,11 +5,13 @@ import {
   findTunnelInbounds,
   resolveTunnelClientConfig,
 } from './wireguardConfig';
+import { fetchClientVpnUri } from '@/lib/amnezia/share';
 
 export interface TunnelConfigItem {
   id: number;
   label: string;
   text: string;
+  vpnUri: string;
   protocol: 'wireguard' | 'amneziawg';
 }
 
@@ -38,15 +40,17 @@ export function useTunnelClientConfigs(
           window.location.hostname,
           publicHost,
         );
+        const vpnUri = await fetchClientVpnUri(client, inbound, window.location.hostname, publicHost);
         return {
           id: inbound.id,
           label: clientTunnelConfigLabel(inbound),
           text,
+          vpnUri,
           protocol: inbound.protocol as 'wireguard' | 'amneziawg',
         };
       }));
       if (!cancelled) {
-        setTunnelConfigs(loaded.filter((item) => item.text.length > 0));
+        setTunnelConfigs(loaded.filter((item) => item.text.length > 0 || item.vpnUri.length > 0));
         setTunnelConfigsLoading(false);
       }
     })();

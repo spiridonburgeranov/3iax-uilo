@@ -31,6 +31,7 @@ func (a *AwgController) initRouter(g *gin.RouterGroup) {
 	g.POST("/server/toggle", a.toggleAll)
 	g.GET("/server/status", a.serverStatus)
 	g.GET("/client/:inboundId/:email/config", a.clientConfig)
+	g.GET("/client/:inboundId/:email/vpnuri", a.clientVpnURI)
 }
 
 func (a *AwgController) provisionNew(c *gin.Context) {
@@ -137,4 +138,37 @@ func (a *AwgController) clientConfig(c *gin.Context) {
 	endpoint := c.Query("endpoint")
 	config, err := a.awgInboundService.ClientConfig(inbound, client, endpoint)
 	jsonObj(c, config, err)
+}
+
+func (a *AwgController) clientVpnURI(c *gin.Context) {
+	inboundID, err := strconv.Atoi(c.Param("inboundId"))
+	if err != nil {
+		jsonMsg(c, "invalid inbound id", err)
+		return
+	}
+	email := c.Param("email")
+	inbound, err := a.inboundService.GetInbound(inboundID)
+	if err != nil {
+		jsonObj(c, "", err)
+		return
+	}
+	clients, err := a.inboundService.GetClients(inbound)
+	if err != nil {
+		jsonObj(c, "", err)
+		return
+	}
+	var client *model.Client
+	for i := range clients {
+		if clients[i].Email == email {
+			client = &clients[i]
+			break
+		}
+	}
+	if client == nil {
+		jsonMsg(c, "client not found", err)
+		return
+	}
+	endpoint := c.Query("endpoint")
+	uri, err := a.awgInboundService.ClientVpnURI(inbound, client, endpoint)
+	jsonObj(c, uri, err)
 }

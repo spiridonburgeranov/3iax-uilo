@@ -150,11 +150,11 @@ func (s *AwgInboundService) ProvisionNew() (*AwgProvisionResult, error) {
 		"h2":           plan.H2,
 		"h3":           plan.H3,
 		"h4":           plan.H4,
-		"i1":           "",
-		"i2":           "",
-		"i3":           "",
-		"i4":           "",
-		"i5":           "",
+		"i1":           plan.I1,
+		"i2":           plan.I2,
+		"i3":           plan.I3,
+		"i4":           plan.I4,
+		"i5":           plan.I5,
 		"postUp":       "",
 		"postDown":     "",
 		"clients":      []any{},
@@ -439,6 +439,20 @@ func (s *AwgInboundService) ClientConfig(inbound *model.Inbound, client *model.C
 		return "", fmt.Errorf("inbound and client are required")
 	}
 	return awg.GenerateClientConfig(inbound, awg.ClientConfigInput{
+		PrivateKey:       client.PrivateKey,
+		PublicKey:        client.PublicKey,
+		AllowedIPs:       client.AllowedIPs,
+		PreSharedKey:     client.PreSharedKey,
+		KeepAlive:        client.KeepAlive,
+		ClientAllowedIPs: "0.0.0.0/0, ::/0",
+	}, endpoint)
+}
+
+func (s *AwgInboundService) ClientVpnURI(inbound *model.Inbound, client *model.Client, endpoint string) (string, error) {
+	if inbound == nil || client == nil {
+		return "", fmt.Errorf("inbound and client are required")
+	}
+	return awg.GenerateVpnURI(inbound, awg.ClientConfigInput{
 		PrivateKey:       client.PrivateKey,
 		PublicKey:        client.PublicKey,
 		AllowedIPs:       client.AllowedIPs,

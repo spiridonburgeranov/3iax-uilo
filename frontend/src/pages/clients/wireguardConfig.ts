@@ -143,6 +143,25 @@ export async function fetchAmneziawgClientConfig(
   return buildAmneziawgClientConfig(client, inbound, host, publicHost);
 }
 
+export async function fetchAmneziawgVpnUri(
+  client: ClientRecord,
+  inbound: InboundOption,
+  host = window.location.hostname,
+  publicHost = '',
+): Promise<string> {
+  const endpointHost = resolveShareHost(inbound, inbound.nodeAddress ?? '', preferPublicHost(host, publicHost));
+  const endpoint = `${endpointHost}:${inbound.port || ''}`;
+  const msg = await HttpUtil.get<string>(
+    `/panel/api/awg/client/${inbound.id}/${encodeURIComponent(client.email)}/vpnuri`,
+    { endpoint },
+    { silent: true },
+  );
+  if (msg.success && typeof msg.obj === 'string' && msg.obj.trim()) {
+    return msg.obj;
+  }
+  return '';
+}
+
 export async function resolveTunnelClientConfig(
   client: ClientRecord,
   inbound: InboundOption | undefined,
