@@ -10,7 +10,6 @@ import {
   buildClientTunnelConfig,
   clientTunnelConfigLabel,
   findTunnelInbounds,
-  isWireguardClient,
 } from './wireguardConfig';
 
 interface SubSettings {
@@ -60,7 +59,7 @@ export default function ClientQrModal({
   }, [client?.subId, subSettings?.enable, subSettings?.subJsonEnable, subSettings?.subJsonURI]);
 
   const tunnelConfigs = useMemo(() => {
-    if (!client || !isWireguardClient(client)) return [];
+    if (!client) return [];
     return findTunnelInbounds(client, inboundsById).map((inbound) => ({
       id: inbound.id,
       label: clientTunnelConfigLabel(inbound),

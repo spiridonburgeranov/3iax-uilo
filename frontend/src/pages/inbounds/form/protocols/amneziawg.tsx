@@ -52,6 +52,19 @@ export default function AmneziawgFields(props: AmneziawgFieldsProps) {
       </Row>
 
       <Row gutter={12}>
+        <Col xs={24} md={12}>
+          <Form.Item name={['settings', 's3']} label="S3">
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+        </Col>
+        <Col xs={24} md={12}>
+          <Form.Item name={['settings', 's4']} label="S4">
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+        </Col>
+      </Row>
+
+      <Row gutter={12}>
         <Col xs={24} md={6}>
           <Form.Item name={['settings', 'h1']} label="H1">
             <InputNumber min={0} style={{ width: '100%' }} />
@@ -72,6 +85,16 @@ export default function AmneziawgFields(props: AmneziawgFieldsProps) {
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
         </Col>
+      </Row>
+
+      <Row gutter={12}>
+        {(['i1', 'i2', 'i3', 'i4', 'i5'] as const).map((key) => (
+          <Col xs={24} md={12} key={key}>
+            <Form.Item name={['settings', key]} label={key.toUpperCase()}>
+              <Input />
+            </Form.Item>
+          </Col>
+        ))}
       </Row>
 
       <Form.Item name={['settings', 'postUp']} label="PostUp">

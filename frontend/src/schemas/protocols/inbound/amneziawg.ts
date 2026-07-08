@@ -31,9 +31,16 @@ export const AmneziawgInboundSettingsSchema = z.object({
   jmax: optionalClearedInt(z.number().int().min(1)),
   s1: optionalClearedInt(z.number().int().min(0)),
   s2: optionalClearedInt(z.number().int().min(0)),
+  s3: optionalClearedInt(z.number().int().min(0)),
+  s4: optionalClearedInt(z.number().int().min(0)),
   h1: optionalClearedInt(z.number().int().min(0)),
   h2: optionalClearedInt(z.number().int().min(0)),
   h3: optionalClearedInt(z.number().int().min(0)),
   h4: optionalClearedInt(z.number().int().min(0)),
+  i1: z.string().optional(),
+  i2: z.string().optional(),
+  i3: z.string().optional(),
+  i4: z.string().optional(),
+  i5: z.string().optional(),
 });
 export type AmneziawgInboundSettings = z.infer<typeof AmneziawgInboundSettingsSchema>;

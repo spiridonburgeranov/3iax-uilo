@@ -32,6 +32,7 @@ func (a *AwgController) initRouter(g *gin.RouterGroup) {
 	g.POST("/client/delByUuid/:uuid", a.deleteClientByUUID)
 	g.POST("/client/toggle/:id", a.toggleClient)
 	g.POST("/client/toggleByUuid/:uuid", a.toggleClientByUUID)
+	g.POST("/client/reissue/:id", a.reissueClient)
 	g.GET("/client/:id/config", a.getClientConfig)
 	g.GET("/client/uuid/:uuid/config", a.getClientConfigByUUID)
 }
@@ -161,6 +162,16 @@ func (a *AwgController) toggleClientByUUID(c *gin.Context) {
 		return
 	}
 	jsonMsg(c, "AWG client toggled", a.awgService.ToggleClientByUUID(clientUUID, body.Enable))
+}
+
+func (a *AwgController) reissueClient(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, "invalid id", err)
+		return
+	}
+	client, err := a.awgService.ReissueClient(id)
+	jsonObj(c, client, err)
 }
 
 func (a *AwgController) getClientConfig(c *gin.Context) {

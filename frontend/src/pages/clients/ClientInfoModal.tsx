@@ -16,7 +16,6 @@ import {
   buildClientTunnelConfig,
   clientTunnelConfigLabel,
   findTunnelInbounds,
-  isWireguardClient,
 } from './wireguardConfig';
 import './ClientInfoModal.css';
 
@@ -143,7 +142,7 @@ export default function ClientInfoModal({
 
   const showSubscription = !!(subSettings?.enable && client?.subId);
   const tunnelConfigs = useMemo(() => {
-    if (!client || !isWireguardClient(client)) return [];
+    if (!client) return [];
     return findTunnelInbounds(client, inboundsById).map((inbound) => ({
       id: inbound.id,
       label: clientTunnelConfigLabel(inbound),

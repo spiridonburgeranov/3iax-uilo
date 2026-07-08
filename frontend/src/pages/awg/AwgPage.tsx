@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Badge, Button, Card, Col, ConfigProvider, Form, Input, InputNumber, Layout, Row, Space, Spin, Switch, Tag, message } from 'antd';
-import { PoweroffOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
+import { Alert, Badge, Button, Card, Col, ConfigProvider, Form, Input, InputNumber, Layout, Modal, Popconfirm, Row, Space, Spin, Switch, Tag, message } from 'antd';
+import { CopyOutlined, DeleteOutlined, EditOutlined, KeyOutlined, PoweroffOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 
 import AppSidebar from '@/layouts/AppSidebar';
 import { useTheme } from '@/hooks/useTheme';
 import { useStatusQuery } from '@/api/queries/useStatusQuery';
-import { HttpUtil, SizeFormatter, Wireguard } from '@/utils';
+import { ClipboardManager, HttpUtil, SizeFormatter, Wireguard } from '@/utils';
 import type { AwgPeer } from '@/models/status';
 import '@/pages/index/IndexPage.css';
 
@@ -61,10 +61,31 @@ interface AwgClientRow {
   i4: string;
   i5: string;
   allowedIPs: string;
+  clientAllowedIPs: string;
+  persistentKeepalive: number;
   upload: number;
   download: number;
   lastOnline: number;
   lastIp: string;
+}
+
+interface AwgClientFormValues {
+  id: number;
+  name: string;
+  email: string;
+  enable: boolean;
+  comment: string;
+  allowedIPs: string;
+  clientAllowedIPs: string;
+  persistentKeepalive: number;
+  jc: number;
+  jmin: number;
+  jmax: number;
+  i1: string;
+  i2: string;
+  i3: string;
+  i4: string;
+  i5: string;
 }
 
 const defaultForm: AwgFormValues = {
@@ -132,10 +153,13 @@ export default function AwgPage() {
   const { isDark, isUltra, antdThemeConfig } = useTheme();
   const { status, refresh: refreshStatus } = useStatusQuery();
   const [form] = Form.useForm<AwgFormValues>();
+  const [clientForm] = Form.useForm<AwgClientFormValues>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [runtimeBusy, setRuntimeBusy] = useState(false);
   const [clients, setClients] = useState<AwgClientRow[]>([]);
+  const [editingClient, setEditingClient] = useState<AwgClientRow | null>(null);
+  const [clientBusy, setClientBusy] = useState(false);
   const [messageApi, messageContextHolder] = message.useMessage();
 
   const pageClass = `index-page ${isDark ? 'is-dark' : ''} ${isUltra ? 'is-ultra' : ''}`.trim();
@@ -218,6 +242,92 @@ export default function AwgPage() {
     }
   }
 
+  function editClient(client: AwgClientRow) {
+    setEditingClient(client);
+    clientForm.setFieldsValue({
+      id: client.id,
+      name: client.name,
+      email: client.email,
+      enable: client.enable,
+      comment: client.comment,
+      allowedIPs: client.allowedIPs,
+      clientAllowedIPs: client.clientAllowedIPs || '0.0.0.0/0, ::/0',
+      persistentKeepalive: client.persistentKeepalive || 25,
+      jc: client.jc || 4,
+      jmin: client.jmin || 64,
+      jmax: client.jmax || 256,
+      i1: client.i1 || '',
+      i2: client.i2 || '',
+      i3: client.i3 || '',
+      i4: client.i4 || '',
+      i5: client.i5 || '',
+    });
+  }
+
+  async function saveClient() {
+    const values = await clientForm.validateFields();
+    setClientBusy(true);
+    try {
+      const msg = await HttpUtil.post(`/panel/api/awg/client/update/${values.id}`, values);
+      if (msg?.success) {
+        messageApi.success('Client saved');
+        setEditingClient(null);
+        await load();
+      }
+    } finally {
+      setClientBusy(false);
+    }
+  }
+
+  async function toggleClient(client: AwgClientRow) {
+    setClientBusy(true);
+    try {
+      const msg = await HttpUtil.post(`/panel/api/awg/client/toggle/${client.id}`, { enable: !client.enable });
+      if (msg?.success) {
+        messageApi.success(!client.enable ? 'Client enabled' : 'Client disabled');
+        await load();
+      }
+    } finally {
+      setClientBusy(false);
+    }
+  }
+
+  async function reissueClient(client: AwgClientRow) {
+    setClientBusy(true);
+    try {
+      const msg = await HttpUtil.post(`/panel/api/awg/client/reissue/${client.id}`);
+      if (msg?.success) {
+        messageApi.success('Client reissued');
+        await load();
+      }
+    } finally {
+      setClientBusy(false);
+    }
+  }
+
+  async function deleteClient(client: AwgClientRow) {
+    setClientBusy(true);
+    try {
+      const msg = await HttpUtil.post(`/panel/api/awg/client/del/${client.id}`);
+      if (msg?.success) {
+        messageApi.success('Client deleted');
+        await load();
+      }
+    } finally {
+      setClientBusy(false);
+    }
+  }
+
+  async function copyClientConfig(client: AwgClientRow) {
+    const msg = await HttpUtil.get(`/panel/api/awg/client/${client.id}/config`, undefined, { silent: true });
+    if (msg?.success && typeof msg.obj === 'string') {
+      const ok = await ClipboardManager.copyText(msg.obj);
+      if (ok) messageApi.success('Config copied');
+      return;
+    }
+    messageApi.warning('Reissue this runtime import before copying config');
+  }
+
   const peerRows = status.awg.peers || [];
 
   return (
@@ -284,6 +394,17 @@ export default function AwgPage() {
                             <span>{client.name || client.email || client.uuid}</span>
                             <Badge status={client.enable ? 'success' : 'default'} text={client.enable ? 'enabled' : 'disabled'} />
                             {!client.privateKey && <Tag color="orange">runtime import</Tag>}
+                            <Space size={4} wrap>
+                              <Button size="small" icon={<EditOutlined />} onClick={() => editClient(client)}>Edit</Button>
+                              <Button size="small" icon={<PoweroffOutlined />} onClick={() => toggleClient(client)}>
+                                {client.enable ? 'Disable' : 'Enable'}
+                              </Button>
+                              <Button size="small" icon={<KeyOutlined />} onClick={() => reissueClient(client)}>Reissue</Button>
+                              <Button size="small" icon={<CopyOutlined />} onClick={() => copyClientConfig(client)}>Config</Button>
+                              <Popconfirm title="Delete AWG client?" onConfirm={() => deleteClient(client)}>
+                                <Button size="small" danger icon={<DeleteOutlined />}>Delete</Button>
+                              </Popconfirm>
+                            </Space>
                           </div>
                           <div className="awg-peer-meta">{client.email || 'no email'} / {client.lastIp || 'no endpoint'}</div>
                           <div className="awg-peer-meta">{client.allowedIPs || 'no allowed IPs'}</div>
@@ -428,6 +549,57 @@ export default function AwgPage() {
           </Layout.Content>
         </Layout>
       </Layout>
+      <Modal
+        open={!!editingClient}
+        title="Edit AmneziaWGv2 client"
+        okText="Save"
+        confirmLoading={clientBusy}
+        onOk={saveClient}
+        onCancel={() => setEditingClient(null)}
+      >
+        <Form form={clientForm} layout="vertical">
+          <Form.Item name="id" hidden><InputNumber /></Form.Item>
+          <Form.Item name="enable" label="Enabled" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item name="name" label="Name">
+            <Input />
+          </Form.Item>
+          <Form.Item name="email" label="Email" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="comment" label="Comment">
+            <Input />
+          </Form.Item>
+          <Form.Item name="allowedIPs" label="Peer allowed IPs" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="clientAllowedIPs" label="Client route allowed IPs">
+            <Input />
+          </Form.Item>
+          <Form.Item name="persistentKeepalive" label="Persistent keepalive">
+            <InputNumber min={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Row gutter={12}>
+            {(['jc', 'jmin', 'jmax'] as const).map((key) => (
+              <Col span={8} key={key}>
+                <Form.Item name={key} label={key.toUpperCase()}>
+                  <InputNumber min={0} style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+            ))}
+          </Row>
+          <Row gutter={12}>
+            {(['i1', 'i2', 'i3', 'i4', 'i5'] as const).map((key) => (
+              <Col xs={24} md={12} key={key}>
+                <Form.Item name={key} label={key.toUpperCase()}>
+                  <Input />
+                </Form.Item>
+              </Col>
+            ))}
+          </Row>
+        </Form>
+      </Modal>
     </ConfigProvider>
   );
 }

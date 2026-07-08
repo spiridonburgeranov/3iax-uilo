@@ -308,10 +308,17 @@ type InboundOption struct {
 	AwgJmax        int    `json:"awgJmax,omitempty"`
 	AwgS1          int    `json:"awgS1,omitempty"`
 	AwgS2          int    `json:"awgS2,omitempty"`
+	AwgS3          int    `json:"awgS3,omitempty"`
+	AwgS4          int    `json:"awgS4,omitempty"`
 	AwgH1          int    `json:"awgH1,omitempty"`
 	AwgH2          int    `json:"awgH2,omitempty"`
 	AwgH3          int    `json:"awgH3,omitempty"`
 	AwgH4          int    `json:"awgH4,omitempty"`
+	AwgI1          string `json:"awgI1,omitempty"`
+	AwgI2          string `json:"awgI2,omitempty"`
+	AwgI3          string `json:"awgI3,omitempty"`
+	AwgI4          string `json:"awgI4,omitempty"`
+	AwgI5          string `json:"awgI5,omitempty"`
 	MtprotoDomain  string `json:"mtprotoDomain,omitempty"`
 	// Hosting node; nil for this panel's own inbounds. Lets the clients
 	// page map a node filter onto inbound IDs (#4997).
@@ -378,10 +385,17 @@ func (s *InboundService) GetInboundOptions(userId int) ([]InboundOption, error) 
 			AwgJmax:           wgHints.Jmax,
 			AwgS1:             wgHints.S1,
 			AwgS2:             wgHints.S2,
+			AwgS3:             wgHints.S3,
+			AwgS4:             wgHints.S4,
 			AwgH1:             wgHints.H1,
 			AwgH2:             wgHints.H2,
 			AwgH3:             wgHints.H3,
 			AwgH4:             wgHints.H4,
+			AwgI1:             wgHints.I1,
+			AwgI2:             wgHints.I2,
+			AwgI3:             wgHints.I3,
+			AwgI4:             wgHints.I4,
+			AwgI5:             wgHints.I5,
 			MtprotoDomain:     inboundMtprotoDomain(r.Protocol, r.Settings),
 			NodeId:            r.NodeId,
 			NodeAddress:       r.NodeAddress,
@@ -402,10 +416,17 @@ type inboundWireguardHint struct {
 	Jmax      int
 	S1        int
 	S2        int
+	S3        int
+	S4        int
 	H1        int
 	H2        int
 	H3        int
 	H4        int
+	I1        string
+	I2        string
+	I3        string
+	I4        string
+	I5        string
 }
 
 func inboundWireguardHints(protocol string, settings string) inboundWireguardHint {
@@ -423,10 +444,17 @@ func inboundWireguardHints(protocol string, settings string) inboundWireguardHin
 		Jmax      int    `json:"jmax"`
 		S1        int    `json:"s1"`
 		S2        int    `json:"s2"`
+		S3        int    `json:"s3"`
+		S4        int    `json:"s4"`
 		H1        int    `json:"h1"`
 		H2        int    `json:"h2"`
 		H3        int    `json:"h3"`
 		H4        int    `json:"h4"`
+		I1        string `json:"i1"`
+		I2        string `json:"i2"`
+		I3        string `json:"i3"`
+		I4        string `json:"i4"`
+		I5        string `json:"i5"`
 	}
 	if err := json.Unmarshal([]byte(settings), &parsed); err != nil {
 		return inboundWireguardHint{}
@@ -449,10 +477,17 @@ func inboundWireguardHints(protocol string, settings string) inboundWireguardHin
 		Jmax:      parsed.Jmax,
 		S1:        parsed.S1,
 		S2:        parsed.S2,
+		S3:        parsed.S3,
+		S4:        parsed.S4,
 		H1:        parsed.H1,
 		H2:        parsed.H2,
 		H3:        parsed.H3,
 		H4:        parsed.H4,
+		I1:        parsed.I1,
+		I2:        parsed.I2,
+		I3:        parsed.I3,
+		I4:        parsed.I4,
+		I5:        parsed.I5,
 	}
 }
 

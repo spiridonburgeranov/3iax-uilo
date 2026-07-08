@@ -302,6 +302,12 @@ func (s *AwgService) UpdateClient(client *model.AwgClient) error {
 	var old model.AwgClient
 	hasOld := client.Id > 0 && database.GetDB().First(&old, client.Id).Error == nil
 	if hasOld {
+		if strings.TrimSpace(client.UUID) == "" {
+			client.UUID = old.UUID
+		}
+		if client.CreatedAt <= 0 {
+			client.CreatedAt = old.CreatedAt
+		}
 		if strings.TrimSpace(client.PrivateKey) == "" {
 			client.PrivateKey = old.PrivateKey
 		}
@@ -352,6 +358,36 @@ func (s *AwgService) UpdateClient(client *model.AwgClient) error {
 		}
 		if client.ServerId <= 0 {
 			client.ServerId = old.ServerId
+		}
+		if client.Upload <= 0 {
+			client.Upload = old.Upload
+		}
+		if client.Download <= 0 {
+			client.Download = old.Download
+		}
+		if client.AllTime <= 0 {
+			client.AllTime = old.AllTime
+		}
+		if client.TotalGB <= 0 {
+			client.TotalGB = old.TotalGB
+		}
+		if client.ExpiryTime <= 0 {
+			client.ExpiryTime = old.ExpiryTime
+		}
+		if client.Reset <= 0 {
+			client.Reset = old.Reset
+		}
+		if client.LimitIp <= 0 {
+			client.LimitIp = old.LimitIp
+		}
+		if client.TgId <= 0 {
+			client.TgId = old.TgId
+		}
+		if client.LastOnline <= 0 {
+			client.LastOnline = old.LastOnline
+		}
+		if strings.TrimSpace(client.LastIP) == "" {
+			client.LastIP = old.LastIP
 		}
 	}
 	if strings.TrimSpace(client.UUID) == "" {
@@ -424,6 +460,65 @@ func (s *AwgService) ToggleClientByUUID(clientUUID string, enable bool) error {
 	return s.UpdateClient(client)
 }
 
+func (s *AwgService) ReissueClient(id int) (*model.AwgClient, error) {
+	client, err := s.GetClient(id)
+	if err != nil {
+		return nil, err
+	}
+	server, err := s.GetServer()
+	if err != nil {
+		return nil, err
+	}
+	priv, pub, err := awg.GenerateKeyPair()
+	if err != nil {
+		return nil, fmt.Errorf("generate awg client keys: %w", err)
+	}
+	psk, err := awg.GeneratePresharedKey()
+	if err != nil {
+		return nil, fmt.Errorf("generate awg psk: %w", err)
+	}
+	client.PrivateKey = priv
+	client.PublicKey = pub
+	client.PresharedKey = psk
+	client.Enable = true
+	if strings.TrimSpace(client.ClientAllowedIPs) == "" {
+		client.ClientAllowedIPs = "0.0.0.0/0, ::/0"
+	}
+	if strings.TrimSpace(client.AllowedIPs) == "" || strings.TrimSpace(client.IPv4Address) == "" {
+		if err := s.assignClientAddresses(server, client); err != nil {
+			return nil, err
+		}
+	}
+	if client.Jc <= 0 {
+		client.Jc = server.Jc
+	}
+	if client.Jmin <= 0 {
+		client.Jmin = server.Jmin
+	}
+	if client.Jmax <= 0 {
+		client.Jmax = server.Jmax
+	}
+	if strings.TrimSpace(client.I1) == "" {
+		client.I1 = server.I1
+	}
+	if strings.TrimSpace(client.I2) == "" {
+		client.I2 = server.I2
+	}
+	if strings.TrimSpace(client.I3) == "" {
+		client.I3 = server.I3
+	}
+	if strings.TrimSpace(client.I4) == "" {
+		client.I4 = server.I4
+	}
+	if strings.TrimSpace(client.I5) == "" {
+		client.I5 = server.I5
+	}
+	if err := s.UpdateClient(client); err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
 func (s *AwgService) GetClientConfig(id int) (string, error) {
 	client, err := s.GetClient(id)
 	if err != nil {
@@ -437,6 +532,41 @@ func (s *AwgService) GetClientConfig(id int) (string, error) {
 		return "", err
 	}
 	return awg.GenerateClientConfig(server, client), nil
+}
+
+func (s *AwgService) assignClientAddresses(server *model.AwgServer, client *model.AwgClient) error {
+	existing, err := s.GetClients()
+	if err != nil {
+		return err
+	}
+	usedIPv4 := make([]string, 0, len(existing))
+	usedIPv6 := make([]string, 0, len(existing))
+	for _, existingClient := range existing {
+		if existingClient.Id == client.Id {
+			continue
+		}
+		usedIPv4 = append(usedIPv4, existingClient.IPv4Address)
+		if existingClient.IPv6Address != "" {
+			usedIPv6 = append(usedIPv6, existingClient.IPv6Address)
+		}
+	}
+	ipv4, err := awg.AllocateIPv4(server.IPv4Pool, server.IPv4Address, usedIPv4)
+	if err != nil {
+		return err
+	}
+	client.IPv4Address = ipv4
+	if server.IPv6Enabled && strings.TrimSpace(server.IPv6Pool) != "" {
+		ipv6, ipErr := awg.AllocateIPv6(server.IPv6Pool, server.IPv6Address, usedIPv6)
+		if ipErr != nil {
+			return ipErr
+		}
+		client.IPv6Address = ipv6
+	}
+	client.AllowedIPs = client.IPv4Address
+	if strings.TrimSpace(client.IPv6Address) != "" {
+		client.AllowedIPs += ", " + client.IPv6Address
+	}
+	return nil
 }
 
 func (s *AwgService) GetClientConfigByUUID(clientUUID string) (string, error) {
@@ -456,10 +586,20 @@ func (s *AwgService) GetClientConfigByUUID(clientUUID string) (string, error) {
 
 func (s *AwgService) UpdateTrafficStats() {
 	server, err := s.GetServer()
-	if err != nil || !awg.IsInterfaceUp(server.InterfaceName) {
+	if err != nil {
 		return
 	}
-	peers, err := awg.RuntimePeersFromInterface(server.InterfaceName)
+	var peers []awg.PeerRuntime
+	if awg.IsInterfaceUp(server.InterfaceName) {
+		peers, err = awg.RuntimePeersFromInterface(server.InterfaceName)
+	} else {
+		peers, err = awg.RuntimeAllPeers()
+		if err == nil && len(peers) > 0 && strings.TrimSpace(peers[0].InterfaceName) != "" {
+			server.InterfaceName = peers[0].InterfaceName
+			server.Enable = true
+			_ = database.GetDB().Save(server).Error
+		}
+	}
 	if err != nil {
 		return
 	}

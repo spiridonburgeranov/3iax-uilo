@@ -68,16 +68,27 @@ export function buildAmneziaClientConfig(
   if (inbound?.wgMtu && inbound.wgMtu > 0) lines.push(`MTU = ${inbound.wgMtu}`);
   for (const [key, value] of [
     ['Jc', inbound?.awgJc ?? 4],
-    ['Jmin', inbound?.awgJmin ?? 50],
-    ['Jmax', inbound?.awgJmax ?? 1000],
-    ['S1', inbound?.awgS1 ?? 0],
-    ['S2', inbound?.awgS2 ?? 0],
-    ['H1', inbound?.awgH1 ?? 1],
-    ['H2', inbound?.awgH2 ?? 2],
-    ['H3', inbound?.awgH3 ?? 3],
-    ['H4', inbound?.awgH4 ?? 4],
+    ['Jmin', inbound?.awgJmin ?? 64],
+    ['Jmax', inbound?.awgJmax ?? 256],
+    ['S1', inbound?.awgS1 ?? 15],
+    ['S2', inbound?.awgS2 ?? 25],
+    ['S3', inbound?.awgS3 ?? 35],
+    ['S4', inbound?.awgS4 ?? 15],
+    ['H1', inbound?.awgH1 ?? 5],
+    ['H2', inbound?.awgH2 ?? 10],
+    ['H3', inbound?.awgH3 ?? 15],
+    ['H4', inbound?.awgH4 ?? 20],
   ] as const) {
     if (typeof value === 'number' && value >= 0) lines.push(`${key} = ${value}`);
+  }
+  for (const [key, value] of [
+    ['I1', inbound?.awgI1],
+    ['I2', inbound?.awgI2],
+    ['I3', inbound?.awgI3],
+    ['I4', inbound?.awgI4],
+    ['I5', inbound?.awgI5],
+  ] as const) {
+    if (value) lines.push(`${key} = ${value}`);
   }
   lines.push('', '[Peer]', `PublicKey = ${inbound?.wgPublicKey || ''}`);
   if (client.preSharedKey) lines.push(`PresharedKey = ${client.preSharedKey}`);

@@ -1564,6 +1564,14 @@ export const sections: readonly Section[] = [
         body: '{\n  "enable": true\n}',
       },
       {
+        method: 'POST',
+        path: '/panel/api/awg/client/reissue/:id',
+        summary: 'Regenerate keys for an AmneziaWGv2 peer and turn a runtime import into a managed client.',
+        params: [
+          { name: 'id', in: 'path', type: 'integer', desc: 'AWG client ID.' },
+        ],
+      },
+      {
         method: 'GET',
         path: '/panel/api/awg/client/:id/config',
         summary: 'Return an Amnezia app-ready client config by numeric ID.',
