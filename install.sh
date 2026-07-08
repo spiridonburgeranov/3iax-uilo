@@ -1526,15 +1526,11 @@ install_x-ui() {
 
     # Download resources
     if [ $# == 0 ]; then
-        tag_version=$(curl -Ls --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 60 "https://api.github.com/repos/spiridonburgeranov/3iax-uilo/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-        if [[ ! -n "$tag_version" ]]; then
-            echo -e "${red}Failed to fetch x-ui version, it may be due to GitHub API restrictions, please try it later${plain}"
-            exit 1
-        fi
-        echo -e "Got x-ui latest version: ${tag_version}, beginning the installation..."
+        tag_version="${XUI_INSTALL_TAG:-dev-latest}"
+        echo -e "Using x-ui release tag: ${tag_version}, beginning the installation..."
         curl -fLR --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 300 -o ${xui_folder}-linux-$(arch).tar.gz https://github.com/spiridonburgeranov/3iax-uilo/releases/download/${tag_version}/x-ui-linux-$(arch).tar.gz
         if [[ $? -ne 0 ]]; then
-            echo -e "${red}Downloading x-ui failed, please be sure that your server can access GitHub ${plain}"
+            echo -e "${red}Downloading x-ui ${tag_version} failed, please be sure that the release asset exists and your server can access GitHub ${plain}"
             exit 1
         fi
         if [[ ! -s ${xui_folder}-linux-$(arch).tar.gz ]]; then
