@@ -8,15 +8,6 @@ on:
       - "go.sum"
       - "frontend/**"
       - ".nvmrc"
-  push:
-    branches:
-      - main
-    paths:
-      - "**.go"
-      - "go.mod"
-      - "go.sum"
-      - "frontend/**"
-      - ".nvmrc"
 
 permissions:
   contents: read
