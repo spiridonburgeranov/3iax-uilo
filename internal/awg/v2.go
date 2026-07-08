@@ -85,11 +85,11 @@ func GenerateServerConfig(server *model.AwgServer, clients []model.AwgClient) st
 	writeAwgObfuscation(&b, server)
 	postUp := strings.TrimSpace(server.PostUp)
 	if postUp == "" {
-		postUp = GenerateDefaultPostUp(server)
+		postUp = GenerateDefaultPostUp(server, clients)
 	}
 	postDown := strings.TrimSpace(server.PostDown)
 	if postDown == "" {
-		postDown = GenerateDefaultPostDown(server)
+		postDown = GenerateDefaultPostDown(server, clients)
 	}
 	if postUp != "" {
 		b.WriteString("PostUp = " + postUp + "\n")
@@ -172,7 +172,17 @@ func nonZero(value int, fallback int) int {
 	return value
 }
 
-func GenerateDefaultPostUp(server *model.AwgServer) string {
+func ipv6Iface(server *model.AwgServer) string {
+	if strings.TrimSpace(server.IPv6ExternalInterface) != "" {
+		return strings.TrimSpace(server.IPv6ExternalInterface)
+	}
+	if strings.TrimSpace(server.ExternalInterface) != "" {
+		return strings.TrimSpace(server.ExternalInterface)
+	}
+	return detectDefaultInterface()
+}
+
+func GenerateDefaultPostUp(server *model.AwgServer, clients []model.AwgClient) string {
 	iface := strings.TrimSpace(server.ExternalInterface)
 	if iface == "" {
 		iface = detectDefaultInterface()
@@ -185,15 +195,31 @@ func GenerateDefaultPostUp(server *model.AwgServer) string {
 	if pool == "" {
 		pool = "10.66.66.0/24"
 	}
-	return strings.Join([]string{
+	parts := []string{
 		fmt.Sprintf("iptables -t nat -A POSTROUTING -s %s -o %s -j MASQUERADE", pool, iface),
 		fmt.Sprintf("iptables -A FORWARD -i %s -j ACCEPT", name),
 		fmt.Sprintf("iptables -A FORWARD -o %s -j ACCEPT", name),
-		"sysctl -w net.ipv4.ip_forward=1",
-	}, "; ")
+	}
+	if server.IPv6Enabled {
+		iface6 := ipv6Iface(server)
+		parts = append(parts,
+			fmt.Sprintf("ip6tables -A FORWARD -i %s -j ACCEPT", name),
+			fmt.Sprintf("ip6tables -A FORWARD -o %s -j ACCEPT", name),
+			fmt.Sprintf("ip6tables -A FORWARD -i %s -o %s -j ACCEPT", iface6, name),
+			"sysctl -w net.ipv6.conf.all.forwarding=1",
+			fmt.Sprintf("sysctl -w net.ipv6.conf.%s.proxy_ndp=1", iface6),
+		)
+		for _, client := range clients {
+			if client.Enable && strings.TrimSpace(client.IPv6Address) != "" {
+				parts = append(parts, fmt.Sprintf("ip -6 neigh add proxy %s dev %s", stripMask(client.IPv6Address), iface6))
+			}
+		}
+	}
+	parts = append(parts, "sysctl -w net.ipv4.ip_forward=1")
+	return strings.Join(parts, "; ")
 }
 
-func GenerateDefaultPostDown(server *model.AwgServer) string {
+func GenerateDefaultPostDown(server *model.AwgServer, clients []model.AwgClient) string {
 	iface := strings.TrimSpace(server.ExternalInterface)
 	if iface == "" {
 		iface = detectDefaultInterface()
@@ -206,11 +232,29 @@ func GenerateDefaultPostDown(server *model.AwgServer) string {
 	if pool == "" {
 		pool = "10.66.66.0/24"
 	}
-	return strings.Join([]string{
+	parts := []string{
 		fmt.Sprintf("iptables -t nat -D POSTROUTING -s %s -o %s -j MASQUERADE", pool, iface),
 		fmt.Sprintf("iptables -D FORWARD -i %s -j ACCEPT", name),
 		fmt.Sprintf("iptables -D FORWARD -o %s -j ACCEPT", name),
-	}, "; ")
+	}
+	if server.IPv6Enabled {
+		iface6 := ipv6Iface(server)
+		parts = append(parts,
+			fmt.Sprintf("ip6tables -D FORWARD -i %s -j ACCEPT", name),
+			fmt.Sprintf("ip6tables -D FORWARD -o %s -j ACCEPT", name),
+			fmt.Sprintf("ip6tables -D FORWARD -i %s -o %s -j ACCEPT", iface6, name),
+		)
+		for _, client := range clients {
+			if client.Enable && strings.TrimSpace(client.IPv6Address) != "" {
+				parts = append(parts, fmt.Sprintf("ip -6 neigh del proxy %s dev %s", stripMask(client.IPv6Address), iface6))
+			}
+		}
+	}
+	return strings.Join(parts, "; ")
+}
+
+func stripMask(value string) string {
+	return strings.TrimSpace(strings.Split(value, "/")[0])
 }
 
 func AllocateIPv4(pool string, serverAddr string, usedIPs []string) (string, error) {

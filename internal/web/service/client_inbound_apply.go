@@ -764,12 +764,6 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	// the transaction back). nodePushPlan only reads, so order doesn't matter.
 	var rt runtime.Runtime
 	var push bool
-	if oldInbound.Protocol == model.AmneziaWG && oldInbound.NodeID == nil {
-		if err := syncAwgClientFromInboundClient(&clients[0]); err != nil {
-			return true, err
-		}
-		return false, nil
-	}
 
 	if len(oldEmail) > 0 {
 		var perr error
@@ -853,8 +847,13 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 		return false, txErr
 	}
 
-	// Apply to the running runtime after the DB is committed — outside the
-	// serialized writer so a slow node call can't stall traffic accounting.
+	if oldInbound.Protocol == model.AmneziaWG && oldInbound.NodeID == nil {
+		if err := syncAwgClientFromInboundClient(&clients[0]); err != nil {
+			return true, err
+		}
+		return false, nil
+	}
+
 	if len(oldEmail) > 0 {
 		if oldInbound.NodeID == nil {
 			if !push {

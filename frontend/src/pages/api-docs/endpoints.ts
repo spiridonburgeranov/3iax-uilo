@@ -1469,6 +1469,120 @@ export const sections: readonly Section[] = [
   },
 
   {
+    id: 'amneziawg',
+    title: 'AmneziaWGv2',
+    description:
+      'Manage the dedicated AmneziaWGv2 server, runtime state, peers, and app-ready client configs. These endpoints operate on the AWG interface and are separate from Xray inbounds.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/awg/server',
+        summary: 'Return the AmneziaWGv2 server settings, creating defaults on first use.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/awg/server',
+        summary: 'Save AmneziaWGv2 server settings and re-apply the interface when enabled.',
+        params: [
+          { name: 'body', in: 'body (json)', type: 'object', desc: 'AwgServer settings.' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/awg/server/toggle',
+        summary: 'Start or stop the AmneziaWGv2 interface.',
+        body: '{\n  "enable": true\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/awg/server/status',
+        summary: 'Return AWG runtime availability, running state, and installed awg version.',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/awg/clients',
+        summary: 'List AmneziaWGv2 peers managed by the panel.',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/awg/client/add',
+        summary: 'Create an AmneziaWGv2 peer and apply the interface config.',
+        params: [
+          { name: 'body', in: 'body (json)', type: 'object', desc: 'AwgClient fields.' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/awg/client/update/:id',
+        summary: 'Update an AmneziaWGv2 peer by numeric ID.',
+        params: [
+          { name: 'id', in: 'path', type: 'integer', desc: 'AWG client ID.' },
+          { name: 'body', in: 'body (json)', type: 'object', desc: 'AwgClient fields.' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/awg/client/updateByUuid/:uuid',
+        summary: 'Update an AmneziaWGv2 peer by UUID shared with the panel client.',
+        params: [
+          { name: 'uuid', in: 'path', type: 'string', desc: 'AWG client UUID.' },
+          { name: 'body', in: 'body (json)', type: 'object', desc: 'AwgClient fields.' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/awg/client/del/:id',
+        summary: 'Delete an AmneziaWGv2 peer by numeric ID.',
+        params: [
+          { name: 'id', in: 'path', type: 'integer', desc: 'AWG client ID.' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/awg/client/delByUuid/:uuid',
+        summary: 'Delete an AmneziaWGv2 peer by UUID.',
+        params: [
+          { name: 'uuid', in: 'path', type: 'string', desc: 'AWG client UUID.' },
+        ],
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/awg/client/toggle/:id',
+        summary: 'Enable or disable an AmneziaWGv2 peer by numeric ID.',
+        params: [
+          { name: 'id', in: 'path', type: 'integer', desc: 'AWG client ID.' },
+        ],
+        body: '{\n  "enable": true\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/awg/client/toggleByUuid/:uuid',
+        summary: 'Enable or disable an AmneziaWGv2 peer by UUID.',
+        params: [
+          { name: 'uuid', in: 'path', type: 'string', desc: 'AWG client UUID.' },
+        ],
+        body: '{\n  "enable": true\n}',
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/awg/client/:id/config',
+        summary: 'Return an Amnezia app-ready client config by numeric ID.',
+        params: [
+          { name: 'id', in: 'path', type: 'integer', desc: 'AWG client ID.' },
+        ],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/awg/client/uuid/:uuid/config',
+        summary: 'Return an Amnezia app-ready client config by UUID.',
+        params: [
+          { name: 'uuid', in: 'path', type: 'string', desc: 'AWG client UUID.' },
+        ],
+      },
+    ],
+  },
+
+  {
     id: 'websocket',
     title: 'WebSocket',
     description:
