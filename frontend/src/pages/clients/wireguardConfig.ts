@@ -25,38 +25,73 @@ export function buildWireguardClientConfig(
   const endpointHost = resolveShareHost(inbound ?? {}, inbound?.nodeAddress ?? '', preferPublicHost(host, publicHost));
   const address = client.allowedIPs || '10.0.0.2/32';
   const endpoint = `${endpointHost}:${inbound?.port || ''}`;
-  const isAmneziaWG = inbound?.protocol === 'amneziawg';
   const inboundName = inbound ? formatInboundLabel(inbound.tag, inbound.remark) : '';
   const remark = [inboundName, client.email, client.comment].filter(Boolean).join(' - ');
   const lines = [
     '[Interface]',
     `PrivateKey = ${client.privateKey || client.password || ''}`,
     `Address = ${address}`,
-    `DNS = ${inbound?.wgDns || (isAmneziaWG ? '1.1.1.1,2606:4700:4700::1111' : '1.1.1.1, 1.0.0.1')}`,
+    `DNS = ${inbound?.wgDns || '1.1.1.1, 1.0.0.1'}`,
   ];
   if (inbound?.wgMtu && inbound.wgMtu > 0) lines.push(`MTU = ${inbound.wgMtu}`);
-  if (isAmneziaWG) {
-    const awgParams = [
-      ['Jc', inbound.awgJc ?? 4],
-      ['Jmin', inbound.awgJmin ?? 50],
-      ['Jmax', inbound.awgJmax ?? 1000],
-      ['S1', inbound.awgS1 ?? 0],
-      ['S2', inbound.awgS2 ?? 0],
-      ['H1', inbound.awgH1 ?? 1],
-      ['H2', inbound.awgH2 ?? 2],
-      ['H3', inbound.awgH3 ?? 3],
-      ['H4', inbound.awgH4 ?? 4],
-    ] as const;
-    for (const [key, value] of awgParams) {
-      if (typeof value === 'number' && value >= 0) lines.push(`${key} = ${value}`);
-    }
-  }
   lines.push('');
   if (remark) lines.push(`# ${remark}`);
   lines.push('[Peer]', `PublicKey = ${inbound?.wgPublicKey || ''}`);
   if (client.preSharedKey) lines.push(`PresharedKey = ${client.preSharedKey}`);
-  lines.push(`Endpoint = ${endpoint}`, 'AllowedIPs = 0.0.0.0/0, ::/0');
-  const keepAlive = client.keepAlive && client.keepAlive > 0 ? client.keepAlive : (isAmneziaWG ? 25 : 0);
-  if (keepAlive > 0) lines.push(`PersistentKeepalive = ${keepAlive}`);
+  lines.push('AllowedIPs = 0.0.0.0/0, ::/0', `Endpoint = ${endpoint}`);
+  if (client.keepAlive && client.keepAlive > 0) lines.push(`PersistentKeepalive = ${client.keepAlive}`);
   return lines.join('\n');
+}
+
+export function buildAmneziaClientConfig(
+  client: ClientRecord,
+  inbound: InboundOption | undefined,
+  host = window.location.hostname,
+  publicHost = '',
+): string {
+  const endpointHost = resolveShareHost(inbound ?? {}, inbound?.nodeAddress ?? '', preferPublicHost(host, publicHost));
+  const address = client.allowedIPs || '10.66.66.2/32';
+  const endpoint = `${endpointHost}:${inbound?.port || ''}`;
+  const lines = [
+    '[Interface]',
+    `PrivateKey = ${client.privateKey || ''}`,
+    `Address = ${address}`,
+    `DNS = ${inbound?.wgDns || '1.1.1.1,2606:4700:4700::1111'}`,
+  ];
+  if (inbound?.wgMtu && inbound.wgMtu > 0) lines.push(`MTU = ${inbound.wgMtu}`);
+  for (const [key, value] of [
+    ['Jc', inbound?.awgJc ?? 4],
+    ['Jmin', inbound?.awgJmin ?? 50],
+    ['Jmax', inbound?.awgJmax ?? 1000],
+    ['S1', inbound?.awgS1 ?? 0],
+    ['S2', inbound?.awgS2 ?? 0],
+    ['H1', inbound?.awgH1 ?? 1],
+    ['H2', inbound?.awgH2 ?? 2],
+    ['H3', inbound?.awgH3 ?? 3],
+    ['H4', inbound?.awgH4 ?? 4],
+  ] as const) {
+    if (typeof value === 'number' && value >= 0) lines.push(`${key} = ${value}`);
+  }
+  lines.push('', '[Peer]', `PublicKey = ${inbound?.wgPublicKey || ''}`);
+  if (client.preSharedKey) lines.push(`PresharedKey = ${client.preSharedKey}`);
+  lines.push(`Endpoint = ${endpoint}`, 'AllowedIPs = 0.0.0.0/0, ::/0');
+  const keepAlive = client.keepAlive && client.keepAlive > 0 ? client.keepAlive : 25;
+  lines.push(`PersistentKeepalive = ${keepAlive}`);
+  return lines.join('\n');
+}
+
+export function buildClientTunnelConfig(
+  client: ClientRecord,
+  inbound: InboundOption | undefined,
+  host = window.location.hostname,
+  publicHost = '',
+): string {
+  if (inbound?.protocol === 'amneziawg') {
+    return buildAmneziaClientConfig(client, inbound, host, publicHost);
+  }
+  return buildWireguardClientConfig(client, inbound, host, publicHost);
+}
+
+export function clientTunnelConfigLabel(inbound: InboundOption | undefined): string {
+  return inbound?.protocol === 'amneziawg' ? 'AmneziaWG config' : 'WireGuard config';
 }

@@ -6,7 +6,12 @@ import { isPostQuantumLink } from '@/lib/xray/inbound-link';
 import { LinkTags, linkMetaText, parseLinkParts } from '@/lib/xray/link-label';
 import { QrPanel } from '@/pages/inbounds/qr';
 import type { ClientRecord, InboundOption } from '@/hooks/useClients';
-import { buildWireguardClientConfig, findWireguardInbound, isWireguardClient } from './wireguardConfig';
+import {
+  buildClientTunnelConfig,
+  clientTunnelConfigLabel,
+  findWireguardInbound,
+  isWireguardClient,
+} from './wireguardConfig';
 
 interface SubSettings {
   enable: boolean;
@@ -56,8 +61,9 @@ export default function ClientQrModal({
   const wgInbound = useMemo(() => findWireguardInbound(client, inboundsById), [client, inboundsById]);
   const wgConfigText = useMemo(() => {
     if (!client || !wgInbound || !isWireguardClient(client)) return '';
-    return buildWireguardClientConfig(client, wgInbound, window.location.hostname, subSettings?.publicHost ?? '');
+    return buildClientTunnelConfig(client, wgInbound, window.location.hostname, subSettings?.publicHost ?? '');
   }, [client, wgInbound, subSettings?.publicHost]);
+  const wgConfigLabel = useMemo(() => clientTunnelConfigLabel(wgInbound), [wgInbound]);
 
   const hasAnything = !!subLink || !!subJsonLink || !!wgConfigText || links.length > 0;
 
@@ -125,7 +131,7 @@ export default function ClientQrModal({
     if (wgConfigText) {
       out.push({
         key: 'wg-config',
-        label: <Tag color="cyan" style={{ margin: 0 }}>{t('pages.clients.wireguardConfig')}</Tag>,
+        label: <Tag color="cyan" style={{ margin: 0 }}>{wgConfigLabel}</Tag>,
         children: (
           <QrPanel
             value={wgConfigText}
@@ -136,7 +142,7 @@ export default function ClientQrModal({
       });
     }
     return out;
-  }, [subLink, subJsonLink, wgConfigText, links, client?.email, t]);
+  }, [subLink, subJsonLink, wgConfigText, wgConfigLabel, links, client?.email, t]);
 
   useEffect(() => {
     if (!open) {

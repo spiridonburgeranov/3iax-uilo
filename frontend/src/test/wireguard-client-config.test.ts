@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildWireguardClientConfig } from '@/pages/clients/wireguardConfig';
+import { buildAmneziaClientConfig, buildWireguardClientConfig, clientTunnelConfigLabel } from '@/pages/clients/wireguardConfig';
 import type { ClientRecord, InboundOption } from '@/hooks/useClients';
 
 const client: ClientRecord = {
@@ -90,7 +90,7 @@ describe('buildWireguardClientConfig', () => {
     expect(cfg).not.toContain('Endpoint = :51820');
   });
 
-  it('includes AmneziaWG obfuscation parameters for amneziawg inbounds', () => {
+  it('keeps the WireGuard generator free of AmneziaWG obfuscation fields', () => {
     const cfg = buildWireguardClientConfig(
       client,
       {
@@ -109,16 +109,13 @@ describe('buildWireguardClientConfig', () => {
       'awg.example.com',
       '',
     );
-    expect(cfg).toContain('Jc = 4');
-    expect(cfg).toContain('Jmin = 50');
-    expect(cfg).toContain('Jmax = 1000');
-    expect(cfg).toContain('S1 = 0');
-    expect(cfg).toContain('H4 = 4');
-    expect(cfg).toContain('Endpoint = awg.example.com:51820');
+    expect(cfg).not.toContain('Jc =');
+    expect(cfg).not.toContain('S1 =');
+    expect(cfg).toContain('DNS = 1.1.1.1, 1.0.0.1');
   });
 
-  it('emits AmneziaWG app-friendly peer ordering and default keepalive', () => {
-    const cfg = buildWireguardClientConfig(
+  it('emits an AmneziaWG app config from the dedicated Amnezia generator', () => {
+    const cfg = buildAmneziaClientConfig(
       { ...client, keepAlive: undefined },
       {
         ...inbound,
@@ -136,5 +133,10 @@ describe('buildWireguardClientConfig', () => {
     expect(cfg.indexOf('PresharedKey =')).toBeLessThan(cfg.indexOf('Endpoint = awg.example.com:51820'));
     expect(cfg.indexOf('Endpoint = awg.example.com:51820')).toBeLessThan(cfg.indexOf('AllowedIPs = 0.0.0.0/0, ::/0'));
     expect(cfg).toContain('PersistentKeepalive = 25');
+  });
+
+  it('labels AmneziaWG configs separately from WireGuard', () => {
+    expect(clientTunnelConfigLabel({ ...inbound, protocol: 'amneziawg' })).toBe('AmneziaWG config');
+    expect(clientTunnelConfigLabel(inbound)).toBe('WireGuard config');
   });
 });

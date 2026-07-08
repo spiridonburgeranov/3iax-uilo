@@ -58,7 +58,7 @@ export default function QrCodeModal({
     if (!open || !dbInbound) return;
     const inbound = inboundFromDb(dbInbound);
     const fallbackHostname = preferPublicHost(window.location.hostname, subSettings?.publicHost ?? '');
-    if (inbound.protocol === Protocols.WIREGUARD) {
+    if (inbound.protocol === Protocols.WIREGUARD || inbound.protocol === Protocols.AMNEZIAWG) {
       const peerRemark = client?.email
         ? `${dbInbound.remark}-${client.email}`
         : dbInbound.remark || '';
@@ -70,14 +70,15 @@ export default function QrCodeModal({
           fallbackHostname,
         }).split('\r\n'),
       );
-      setWireguardLinks(
-        genWireguardLinks({
+      const nextWireguardLinks = inbound.protocol === Protocols.WIREGUARD
+        ? genWireguardLinks({
           inbound,
           remark: peerRemark,
           hostOverride: nodeAddress,
           fallbackHostname,
-        }).split('\r\n'),
-      );
+        }).split('\r\n')
+        : [];
+      setWireguardLinks(nextWireguardLinks);
       setLinks([]);
     } else {
       setLinks(
@@ -116,9 +117,10 @@ export default function QrCodeModal({
       items.push({ key: `l${idx}`, header: link.remark || `Link ${idx + 1}`, value: link.link });
     });
     wireguardConfigs.forEach((cfg, idx) => {
+      const isAmneziawg = dbInbound?.protocol === Protocols.AMNEZIAWG;
       items.push({
         key: `wc${idx}`,
-        header: `Peer ${idx + 1} config`,
+        header: isAmneziawg ? `AmneziaWG ${idx + 1} config` : `Peer ${idx + 1} config`,
         value: cfg,
         downloadName: `peer-${idx + 1}.conf`,
       });

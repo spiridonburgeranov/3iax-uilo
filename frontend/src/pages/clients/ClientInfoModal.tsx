@@ -12,7 +12,12 @@ import { isPostQuantumLink } from '@/lib/xray/inbound-link';
 import { LinkTags, linkMetaText, parseLinkParts } from '@/lib/xray/link-label';
 import { QrPanel } from '@/pages/inbounds/qr';
 import ConfigBlock from '@/components/clients/ConfigBlock';
-import { buildWireguardClientConfig, findWireguardInbound, isWireguardClient } from './wireguardConfig';
+import {
+  buildClientTunnelConfig,
+  clientTunnelConfigLabel,
+  findWireguardInbound,
+  isWireguardClient,
+} from './wireguardConfig';
 import './ClientInfoModal.css';
 
 const INBOUND_PROTOCOL_COLORS: Record<string, string> = {
@@ -139,8 +144,9 @@ export default function ClientInfoModal({
   const wgInbound = useMemo(() => findWireguardInbound(client, inboundsById), [client, inboundsById]);
   const wgConfigText = useMemo(() => {
     if (!client || !wgInbound || !isWireguardClient(client)) return '';
-    return buildWireguardClientConfig(client, wgInbound, window.location.hostname, subSettings?.publicHost ?? '');
+    return buildClientTunnelConfig(client, wgInbound, window.location.hostname, subSettings?.publicHost ?? '');
   }, [client, wgInbound, subSettings?.publicHost]);
+  const wgConfigLabel = useMemo(() => clientTunnelConfigLabel(wgInbound), [wgInbound]);
 
   async function copyValue(text: string) {
     if (!text) return;
@@ -498,7 +504,7 @@ export default function ClientInfoModal({
 
             {wgConfigText && client && (
               <>
-                <Divider>{t('pages.clients.wireguardConfig')}</Divider>
+                <Divider>{wgConfigLabel}</Divider>
                 <ConfigBlock
                   label={t('pages.clients.config')}
                   text={wgConfigText}

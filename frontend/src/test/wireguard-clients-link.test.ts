@@ -112,5 +112,6 @@ describe('wireguard multi-client link/config fan-out', () => {
     expect(out).toContain('S1 = 0');
     expect(out.indexOf('Endpoint = awg.example.test:51820')).toBeLessThan(out.indexOf('AllowedIPs = 0.0.0.0/0, ::/0'));
     expect(out).toContain('PersistentKeepalive = 25');
+    expect(genWireguardLinks({ inbound, remark: 'awg-mc', fallbackHostname: 'awg.example.test' })).toBe('');
   });
 });
