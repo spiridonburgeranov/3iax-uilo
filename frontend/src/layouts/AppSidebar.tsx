@@ -190,7 +190,7 @@ export default function AppSidebar() {
     { key: '/xray#basic', icon: <SettingOutlined />, label: t('pages.xray.basicTemplate') },
     { key: '/xray#balancer', icon: <ClusterOutlined />, label: t('pages.xray.Balancers') },
     { key: '/xray#dns', icon: <DatabaseOutlined />, label: 'DNS' },
-    { key: '/awg', icon: <ImportOutlined />, label: 'AmneziaWG' },
+    { key: '/awg', icon: <ImportOutlined />, label: 'AmneziaWGv2' },
     { key: '/xray#advanced', icon: <CodeOutlined />, label: t('pages.xray.advancedTemplate') },
   ], [t]);
 

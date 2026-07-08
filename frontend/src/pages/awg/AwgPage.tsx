@@ -36,6 +36,22 @@ interface AwgFormValues {
   trafficReset: string;
 }
 
+interface AwgClientRow {
+  id: number;
+  uuid: string;
+  name: string;
+  email: string;
+  enable: boolean;
+  comment: string;
+  publicKey: string;
+  privateKey: string;
+  allowedIPs: string;
+  upload: number;
+  download: number;
+  lastOnline: number;
+  lastIp: string;
+}
+
 const defaultForm: AwgFormValues = {
   id: 0,
   enable: false,
@@ -97,6 +113,7 @@ export default function AwgPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [runtimeBusy, setRuntimeBusy] = useState(false);
+  const [clients, setClients] = useState<AwgClientRow[]>([]);
   const [messageApi, messageContextHolder] = message.useMessage();
 
   const pageClass = `index-page ${isDark ? 'is-dark' : ''} ${isUltra ? 'is-ultra' : ''}`.trim();
@@ -106,6 +123,8 @@ export default function AwgPage() {
     try {
       const msg = await HttpUtil.get('/panel/api/awg/server', undefined, { silent: true });
       form.setFieldsValue(formFromServer((msg?.obj || null) as Partial<AwgFormValues> | null));
+      const clientsMsg = await HttpUtil.get('/panel/api/awg/clients', undefined, { silent: true });
+      setClients(Array.isArray(clientsMsg?.obj) ? clientsMsg.obj as AwgClientRow[] : []);
       await refreshStatus();
     } finally {
       setLoading(false);
@@ -229,6 +248,30 @@ export default function AwgPage() {
                         ))}
                       </div>
                     </Spin>
+                  </Card>
+                </Col>
+
+                <Col span={24}>
+                  <Card title="AmneziaWGv2 clients" extra={<Tag>{clients.length} clients</Tag>}>
+                    <div className="awg-peer-list">
+                      {clients.length === 0 ? (
+                        <Tag>no clients</Tag>
+                      ) : clients.map((client) => (
+                        <div className="awg-peer-row" key={client.uuid || client.id}>
+                          <div className="awg-peer-main">
+                            <span>{client.name || client.email || client.uuid}</span>
+                            <Badge status={client.enable ? 'success' : 'default'} text={client.enable ? 'enabled' : 'disabled'} />
+                            {!client.privateKey && <Tag color="orange">runtime import</Tag>}
+                          </div>
+                          <div className="awg-peer-meta">{client.email || 'no email'} / {client.lastIp || 'no endpoint'}</div>
+                          <div className="awg-peer-meta">{client.allowedIPs || 'no allowed IPs'}</div>
+                          <div className="awg-peer-meta">{client.publicKey || 'no public key'}</div>
+                          <div className="awg-peer-meta">
+                            up {SizeFormatter.sizeFormat(client.upload || 0)} / down {SizeFormatter.sizeFormat(client.download || 0)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </Card>
                 </Col>
 

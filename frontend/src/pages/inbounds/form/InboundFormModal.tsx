@@ -97,6 +97,7 @@ const labelWithHint = (label: string, hint: string) => (
 );
 
 const PROTOCOL_OPTIONS = Object.values(Protocols).map((p) => ({ value: p, label: p }));
+const CREATE_PROTOCOL_OPTIONS = PROTOCOL_OPTIONS.filter((p) => p.value !== Protocols.AMNEZIAWG);
 const TRAFFIC_RESETS = ['never', 'hourly', 'daily', 'weekly', 'monthly'] as const;
 const SHARE_ADDR_STRATEGIES = ['node', 'listen', 'custom'] as const;
 const SHARE_ADDR_HOSTNAME_RE = /^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$/;
@@ -545,7 +546,7 @@ export default function InboundFormModal({
       )}
 
       <Form.Item name="protocol" label={t('pages.inbounds.protocol')}>
-        <Select disabled={mode === 'edit'} options={PROTOCOL_OPTIONS} />
+        <Select disabled={mode === 'edit'} options={mode === 'edit' ? PROTOCOL_OPTIONS : CREATE_PROTOCOL_OPTIONS} />
       </Form.Item>
 
       <Form.Item

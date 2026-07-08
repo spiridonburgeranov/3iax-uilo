@@ -115,7 +115,7 @@ export default function InboundInfoModal({
 
     const inboundForLinks = inboundFromDb(dbInbound);
     const fallbackHostname = preferPublicHost(window.location.hostname, subSettings?.publicHost ?? '');
-    if (info.protocol === Protocols.WIREGUARD || info.protocol === Protocols.AMNEZIAWG) {
+    if (info.protocol === Protocols.WIREGUARD) {
       setWireguardConfigs(
         genWireguardConfigs({
           inbound: inboundForLinks,
@@ -124,15 +124,12 @@ export default function InboundInfoModal({
           fallbackHostname,
         }).split('\r\n'),
       );
-      const nextWireguardLinks = info.protocol === Protocols.WIREGUARD
-        ? genWireguardLinks({
-          inbound: inboundForLinks,
-          remark: dbInbound.remark,
-          hostOverride: nodeAddress,
-          fallbackHostname,
-        }).split('\r\n')
-        : [];
-      setWireguardLinks(nextWireguardLinks);
+      setWireguardLinks(genWireguardLinks({
+        inbound: inboundForLinks,
+        remark: dbInbound.remark,
+        hostOverride: nodeAddress,
+        fallbackHostname,
+      }).split('\r\n'));
       setLinks([]);
     } else {
       setLinks(
@@ -826,9 +823,7 @@ export default function InboundInfoModal({
                 <div className="link-panel">
                   <div className="link-panel-header">
                     <Tag color="green">
-                      {inbound?.protocol === Protocols.AMNEZIAWG
-                        ? `AmneziaWG ${idx + 1} config`
-                        : t('pages.inbounds.info.peerNumberConfig', { n: idx + 1 })}
+                      {t('pages.inbounds.info.peerNumberConfig', { n: idx + 1 })}
                     </Tag>
                     <Tooltip title={t('copy')}>
                       <Button size="small" icon={<CopyOutlined />} aria-label={t('copy')} onClick={() => copyText(wireguardConfigs[idx], t)} />

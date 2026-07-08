@@ -66,6 +66,7 @@ func (a *AwgController) getServerStatus(c *gin.Context) {
 }
 
 func (a *AwgController) getClients(c *gin.Context) {
+	a.awgService.UpdateTrafficStats()
 	clients, err := a.awgService.GetClients()
 	jsonObj(c, clients, err)
 }

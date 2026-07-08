@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 const TITLE_KEYS: Record<string, string> = {
   '/': 'menu.dashboard',
   '/inbounds': 'menu.inbounds',
-  '/awg': 'AmneziaWG',
+  '/awg': 'AmneziaWGv2',
   '/clients': 'menu.clients',
   '/groups': 'menu.groups',
   '/nodes': 'menu.nodes',

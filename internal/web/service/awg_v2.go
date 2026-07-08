@@ -365,6 +365,9 @@ func (s *AwgService) GetClientConfig(id int) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if strings.TrimSpace(client.PrivateKey) == "" {
+		return "", fmt.Errorf("awg client private key is not available")
+	}
 	server, err := s.GetServer()
 	if err != nil {
 		return "", err
@@ -377,6 +380,9 @@ func (s *AwgService) GetClientConfigByUUID(clientUUID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if strings.TrimSpace(client.PrivateKey) == "" {
+		return "", fmt.Errorf("awg client private key is not available")
+	}
 	server, err := s.GetServer()
 	if err != nil {
 		return "", err
@@ -386,7 +392,7 @@ func (s *AwgService) GetClientConfigByUUID(clientUUID string) (string, error) {
 
 func (s *AwgService) UpdateTrafficStats() {
 	server, err := s.GetServer()
-	if err != nil || !server.Enable || !awg.IsInterfaceUp(server.InterfaceName) {
+	if err != nil || !awg.IsInterfaceUp(server.InterfaceName) {
 		return
 	}
 	peers, err := awg.RuntimePeersFromInterface(server.InterfaceName)
@@ -405,6 +411,11 @@ func (s *AwgService) UpdateTrafficStats() {
 		for _, peer := range peers {
 			client, ok := clientByKey[peer.PublicKey]
 			if !ok {
+				imported := runtimePeerToClient(server, peer)
+				if err := tx.Create(imported).Error; err != nil {
+					return err
+				}
+				clientByKey[peer.PublicKey] = imported
 				continue
 			}
 			updates := map[string]any{
@@ -421,6 +432,40 @@ func (s *AwgService) UpdateTrafficStats() {
 		}
 		return nil
 	})
+}
+
+func runtimePeerToClient(server *model.AwgServer, peer awg.PeerRuntime) *model.AwgClient {
+	name := runtimePeerLabel(peer.PublicKey)
+	client := &model.AwgClient{
+		ServerId:    server.Id,
+		UUID:        uuid.NewString(),
+		Name:        name,
+		Email:       name,
+		Enable:      true,
+		Comment:     "Imported from running AmneziaWGv2 interface",
+		PublicKey:   peer.PublicKey,
+		AllowedIPs:  strings.Join(peer.AllowedIPs, ", "),
+		Upload:      int64(peer.TransferTx),
+		Download:    int64(peer.TransferRx),
+		LastIP:      stripEndpointPort(peer.Endpoint),
+		CreatedAt:   time.Now().UnixMilli(),
+		UpdatedAt:   time.Now().UnixMilli(),
+	}
+	if peer.LatestHandshake > 0 {
+		client.LastOnline = peer.LatestHandshake * 1000
+	}
+	return client
+}
+
+func runtimePeerLabel(publicKey string) string {
+	key := strings.NewReplacer("/", "", "+", "", "=", "").Replace(publicKey)
+	if len(key) > 12 {
+		key = key[:12]
+	}
+	if key == "" {
+		key = uuid.NewString()[:12]
+	}
+	return "runtime-" + key
 }
 
 func (s *AwgService) StartIfEnabled() {

@@ -59,7 +59,7 @@ export default function AwgStatusCard({
       hoverable
       title={
         <Space>
-          <span>AmneziaWG</span>
+          <span>AmneziaWGv2</span>
           {isMobile && <Tag color={status.awg.installed ? 'green' : 'red'}>{installedText}</Tag>}
         </Space>
       }
@@ -70,20 +70,20 @@ export default function AwgStatusCard({
           {!isMobile && <span>{installedText}</span>}
         </Space>,
         <Popover key="peers" title="Runtime peers" content={peerContent} trigger="click">
-          <Space className="action" role="button" tabIndex={0} aria-label="AmneziaWG peers">
+          <Space className="action" role="button" tabIndex={0} aria-label="AmneziaWGv2 peers">
             <TeamOutlined />
             {!isMobile && <span>{peerText} peers</span>}
           </Space>
         </Popover>,
-        <Space className="action" key="toggle" role="button" tabIndex={0} aria-label={`${toggleLabel} AmneziaWG`} onClick={toggleHandler} onKeyDown={activateOnKey(toggleHandler)}>
+        <Space className="action" key="toggle" role="button" tabIndex={0} aria-label={`${toggleLabel} AmneziaWGv2`} onClick={toggleHandler} onKeyDown={activateOnKey(toggleHandler)}>
           <PoweroffOutlined />
           {!isMobile && <span>{toggleLabel}</span>}
         </Space>,
-        <Space className="action" key="restart" role="button" tabIndex={0} aria-label="Restart AmneziaWG" onClick={onRestartAwg} onKeyDown={activateOnKey(onRestartAwg)}>
+        <Space className="action" key="restart" role="button" tabIndex={0} aria-label="Restart AmneziaWGv2" onClick={onRestartAwg} onKeyDown={activateOnKey(onRestartAwg)}>
           <ReloadOutlined />
           {!isMobile && <span>Restart</span>}
         </Space>,
-        <Space className="action" key="settings" role="button" tabIndex={0} aria-label="AmneziaWG" onClick={() => navigate('/awg')} onKeyDown={activateOnKey(() => navigate('/awg'))}>
+        <Space className="action" key="settings" role="button" tabIndex={0} aria-label="AmneziaWGv2" onClick={() => navigate('/awg')} onKeyDown={activateOnKey(() => navigate('/awg'))}>
           <SettingOutlined />
           {!isMobile && <span>Settings</span>}
         </Space>,
