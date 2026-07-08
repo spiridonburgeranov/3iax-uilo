@@ -531,7 +531,7 @@ func (s *AwgService) GetClientConfig(id int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return awg.GenerateClientConfig(server, client), nil
+	return awg.GenerateLegacyClientConfig(server, client), nil
 }
 
 func (s *AwgService) assignClientAddresses(server *model.AwgServer, client *model.AwgClient) error {
@@ -581,7 +581,7 @@ func (s *AwgService) GetClientConfigByUUID(clientUUID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return awg.GenerateClientConfig(server, client), nil
+	return awg.GenerateLegacyClientConfig(server, client), nil
 }
 
 func (s *AwgService) UpdateTrafficStats() {

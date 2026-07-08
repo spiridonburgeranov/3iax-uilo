@@ -114,7 +114,7 @@ func GenerateServerConfig(server *model.AwgServer, clients []model.AwgClient) st
 	return b.String()
 }
 
-func GenerateClientConfig(server *model.AwgServer, client *model.AwgClient) string {
+func GenerateLegacyClientConfig(server *model.AwgServer, client *model.AwgClient) string {
 	var b strings.Builder
 	b.WriteString("[Interface]\n")
 	b.WriteString("PrivateKey = " + client.PrivateKey + "\n")
