@@ -15,18 +15,7 @@ name: Deploy Smoke Tests
 # base, so it runs on every tag push.
 
 on:
-  push:
-    branches:
-      - "**"
-    paths:
-      - "install.sh"
-      - "deploy/**"
-      - ".github/workflows/smoke.yml"
-  pull_request:
-    paths:
-      - "install.sh"
-      - "deploy/**"
-      - ".github/workflows/smoke.yml"
+  workflow_dispatch:
   workflow_run:
     workflows: ["Release 3X-UI"]
     types: [completed]
