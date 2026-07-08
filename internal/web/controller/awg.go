@@ -41,12 +41,8 @@ func (a *AwgController) importDiscovered(c *gin.Context) {
 		Force bool `json:"force"`
 	}
 	_ = c.ShouldBindJSON(&body)
-	count, err := a.awgInboundService.ImportDiscovered(body.Force)
-	if err != nil {
-		jsonMsg(c, "import AWG interfaces", err)
-		return
-	}
-	jsonObj(c, map[string]int{"imported": count}, nil)
+	result, err := a.awgInboundService.ImportDiscovered(body.Force)
+	jsonObj(c, result, err)
 }
 
 func (a *AwgController) listInbounds(c *gin.Context) {

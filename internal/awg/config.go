@@ -56,6 +56,28 @@ func ConfigDir() string {
 	return defaultConfigDir
 }
 
+func ConfigDirs() []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, 4)
+	for _, dir := range []string{
+		ConfigDir(),
+		"/etc/amnezia/amneziawg",
+		"/opt/amnezia/amneziawg",
+		"/etc/amnezia/wireguard",
+	} {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			continue
+		}
+		if _, ok := seen[dir]; ok {
+			continue
+		}
+		seen[dir] = struct{}{}
+		out = append(out, dir)
+	}
+	return out
+}
+
 func DiscoverInterfaces() ([]ParsedInterface, error) {
 	if !IsInstalled() {
 		return nil, nil
@@ -82,13 +104,21 @@ func DiscoverInterfaces() ([]ParsedInterface, error) {
 			entry = ParsedInterface{Name: name}
 		}
 		entry.Running = true
+		if strings.TrimSpace(entry.PrivateKey) == "" || len(entry.Peers) == 0 {
+			if enriched, err := enrichInterfaceFromRuntime(name, entry); err == nil {
+				entry = enriched
+			}
+		}
 		if entry.ConfigPath == "" {
-			entry.ConfigPath = filepath.Join(ConfigDir(), name+".conf")
-			if parsed, perr := ParseConfigFile(entry.ConfigPath); perr == nil {
-				parsed.Name = name
-				parsed.ConfigPath = entry.ConfigPath
-				parsed.Running = true
-				entry = parsed
+			for _, dir := range ConfigDirs() {
+				candidate := filepath.Join(dir, name+".conf")
+				if parsed, perr := ParseConfigFile(candidate); perr == nil && strings.TrimSpace(parsed.PrivateKey) != "" {
+					parsed.Name = name
+					parsed.ConfigPath = candidate
+					parsed.Running = true
+					entry = mergeParsedInterface(entry, parsed)
+					break
+				}
 			}
 		}
 		byName[name] = entry
@@ -101,22 +131,30 @@ func DiscoverInterfaces() ([]ParsedInterface, error) {
 }
 
 func listConfigPaths() ([]string, error) {
-	dir := ConfigDir()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
+	out := make([]string, 0, 8)
+	seen := map[string]struct{}{}
+	for _, dir := range ConfigDirs() {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("read awg config dir %s: %w", dir, err)
 		}
-		return nil, fmt.Errorf("read awg config dir: %w", err)
-	}
-	out := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if strings.HasSuffix(strings.ToLower(name), ".conf") {
-			out = append(out, filepath.Join(dir, name))
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if !strings.HasSuffix(strings.ToLower(name), ".conf") {
+				continue
+			}
+			path := filepath.Join(dir, name)
+			if _, ok := seen[path]; ok {
+				continue
+			}
+			seen[path] = struct{}{}
+			out = append(out, path)
 		}
 	}
 	return out, nil
@@ -130,6 +168,158 @@ func listRunningInterfaces() []string {
 	}
 	lines := strings.Fields(strings.TrimSpace(string(output)))
 	return lines
+}
+
+func enrichInterfaceFromRuntime(name string, base ParsedInterface) (ParsedInterface, error) {
+	if strings.TrimSpace(name) == "" {
+		return base, fmt.Errorf("interface name is required")
+	}
+	if text, err := exportInterfaceConfig(name); err == nil && strings.TrimSpace(text) != "" {
+		parsed, perr := ParseConfigText(text, name)
+		if perr == nil {
+			parsed.Running = true
+			return mergeParsedInterface(base, parsed), nil
+		}
+	}
+	port, _ := readAwgInt(name, "listen-port")
+	if port > 0 {
+		base.ListenPort = port
+	}
+	peers, err := dumpPeers(name)
+	if err == nil {
+		for _, row := range peers {
+			base.Peers = append(base.Peers, ParsedPeer{
+				PublicKey:  row.PublicKey,
+				AllowedIPs: row.AllowedIPs,
+				KeepAlive:  row.KeepAlive,
+			})
+		}
+	}
+	if strings.TrimSpace(base.PrivateKey) == "" && len(base.Peers) == 0 && base.ListenPort <= 0 {
+		return base, fmt.Errorf("unable to read runtime config for %s", name)
+	}
+	base.Name = name
+	base.Running = true
+	return base, nil
+}
+
+func exportInterfaceConfig(name string) (string, error) {
+	cmd := exec.Command("awg", "showconf", name)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
+}
+
+func readAwgInt(iface, field string) (int, error) {
+	cmd := exec.Command("awg", "show", iface, field)
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(string(output)))
+}
+
+func mergeParsedInterface(base, extra ParsedInterface) ParsedInterface {
+	out := base
+	if strings.TrimSpace(extra.ConfigPath) != "" {
+		out.ConfigPath = extra.ConfigPath
+	}
+	if strings.TrimSpace(extra.PrivateKey) != "" {
+		out.PrivateKey = extra.PrivateKey
+	}
+	if extra.ListenPort > 0 {
+		out.ListenPort = extra.ListenPort
+	}
+	if strings.TrimSpace(extra.Address) != "" {
+		out.Address = extra.Address
+	}
+	if extra.MTU > 0 {
+		out.MTU = extra.MTU
+	}
+	if strings.TrimSpace(extra.DNS) != "" {
+		out.DNS = extra.DNS
+	}
+	if extra.Jc > 0 {
+		out.Jc = extra.Jc
+	}
+	if extra.Jmin > 0 {
+		out.Jmin = extra.Jmin
+	}
+	if extra.Jmax > 0 {
+		out.Jmax = extra.Jmax
+	}
+	if len(extra.Peers) > 0 {
+		out.Peers = extra.Peers
+	}
+	if strings.TrimSpace(extra.PrivateKey) != "" {
+		out.S1 = extra.S1
+		out.S2 = extra.S2
+		out.S3 = extra.S3
+		out.S4 = extra.S4
+	}
+	if strings.TrimSpace(extra.H1) != "" {
+		out.H1 = extra.H1
+	}
+	if strings.TrimSpace(extra.H2) != "" {
+		out.H2 = extra.H2
+	}
+	if strings.TrimSpace(extra.H3) != "" {
+		out.H3 = extra.H3
+	}
+	if strings.TrimSpace(extra.H4) != "" {
+		out.H4 = extra.H4
+	}
+	if strings.TrimSpace(extra.I1) != "" {
+		out.I1 = extra.I1
+	}
+	if strings.TrimSpace(extra.I2) != "" {
+		out.I2 = extra.I2
+	}
+	if strings.TrimSpace(extra.I3) != "" {
+		out.I3 = extra.I3
+	}
+	if strings.TrimSpace(extra.I4) != "" {
+		out.I4 = extra.I4
+	}
+	if strings.TrimSpace(extra.I5) != "" {
+		out.I5 = extra.I5
+	}
+	if strings.TrimSpace(extra.PostUp) != "" {
+		out.PostUp = extra.PostUp
+	}
+	if strings.TrimSpace(extra.PostDown) != "" {
+		out.PostDown = extra.PostDown
+	}
+	if len(extra.Peers) > 0 {
+		out.Peers = extra.Peers
+	}
+	out.Name = extra.Name
+	out.Running = extra.Running || base.Running
+	return out
+}
+
+func ParseConfigText(text, name string) (ParsedInterface, error) {
+	tmp, err := os.CreateTemp("", "awg-import-*.conf")
+	if err != nil {
+		return ParsedInterface{}, err
+	}
+	path := tmp.Name()
+	defer os.Remove(path)
+	if _, err := tmp.WriteString(text); err != nil {
+		_ = tmp.Close()
+		return ParsedInterface{}, err
+	}
+	_ = tmp.Close()
+	parsed, err := ParseConfigFile(path)
+	if err != nil {
+		return ParsedInterface{}, err
+	}
+	if parsed.Name == "" {
+		parsed.Name = name
+	}
+	return parsed, nil
 }
 
 func ParseConfigFile(path string) (ParsedInterface, error) {

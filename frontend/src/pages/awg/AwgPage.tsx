@@ -60,16 +60,28 @@ export default function AwgPage() {
         HttpUtil.get('/panel/api/awg/discovered', undefined, { silent: true }),
         HttpUtil.get('/panel/api/awg/inbounds', undefined, { silent: true }),
       ]);
-      setDiscovered(Array.isArray(discoveredMsg?.obj) ? discoveredMsg.obj as AwgDiscovered[] : []);
-      setInbounds(Array.isArray(inboundsMsg?.obj) ? inboundsMsg.obj as AwgInboundRuntime[] : []);
+      const discoveredItems = Array.isArray(discoveredMsg?.obj) ? discoveredMsg.obj as AwgDiscovered[] : [];
+      const inboundItems = Array.isArray(inboundsMsg?.obj) ? inboundsMsg.obj as AwgInboundRuntime[] : [];
+      setDiscovered(discoveredItems);
+      setInbounds(inboundItems);
       await refreshStatus();
+      return { discovered: discoveredItems, inbounds: inboundItems };
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void load();
+    void (async () => {
+      const snapshot = await load();
+      const pending = (snapshot?.discovered || []).filter((item) => !item.imported);
+      if (pending.length > 0) {
+        const result = await importDiscovered(false, true);
+        if (result && Array.isArray(result.errors) && result.errors.length > 0) {
+          messageApi.warning(result.errors.join('; '));
+        }
+      }
+    })();
   }, []);
 
   const pendingImport = useMemo(
@@ -77,18 +89,30 @@ export default function AwgPage() {
     [discovered],
   );
 
-  async function importDiscovered(force = false) {
+  async function importDiscovered(force = false, silent = false) {
     setBusy(true);
     try {
-      const msg = await HttpUtil.post('/panel/api/awg/scan/import', { force });
+      const msg = await HttpUtil.post('/panel/api/awg/scan/import', { force }, { silent });
       if (msg?.success) {
-        const imported = Number((msg.obj as { imported?: number } | undefined)?.imported || 0);
-        messageApi.success(imported > 0 ? `Imported ${imported} interface(s)` : 'No new interfaces to import');
+        const result = (msg.obj as { imported?: number; skipped?: number; errors?: string[] } | undefined) || {};
+        const imported = Number(result.imported || 0);
+        const errors = Array.isArray(result.errors) ? result.errors : [];
+        if (!silent) {
+          if (errors.length > 0) {
+            messageApi.warning(errors.join('; '));
+          } else if (imported > 0) {
+            messageApi.success(`Imported ${imported} interface(s)`);
+          } else {
+            messageApi.info('No new interfaces to import');
+          }
+        }
         await load();
+        return result;
       }
     } finally {
       setBusy(false);
     }
+    return null;
   }
 
   async function toggleAll(enable: boolean) {
@@ -166,10 +190,12 @@ export default function AwgPage() {
                       />
                     )}
                     <p style={{ marginBottom: 16 }}>
-                      Each AmneziaWG inbound maps to one kernel interface and its config file under
+                      Each AmneziaWG inbound maps to one kernel interface and its config file.
+                      Set
                       {' '}
-                      <code>/etc/amnezia/amneziawg/</code>
-                      . Peers are managed as inbound clients.
+                      <code>XUI_AWG_CONFIG_DIR</code>
+                      {' '}
+                      if Amnezia stores configs outside the default paths. Peers are managed as inbound clients.
                     </p>
                   </Card>
                 </Col>

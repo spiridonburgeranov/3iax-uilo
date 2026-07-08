@@ -16,8 +16,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const awgScanSettingKey = "awgInterfaceScanDone"
-
 type AwgInboundService struct{}
 
 type AwgDiscoveredInterface struct {
@@ -33,17 +31,23 @@ type AwgDiscoveredInterface struct {
 	InboundNote string `json:"inboundRemark,omitempty"`
 }
 
+type AwgImportResult struct {
+	Imported int      `json:"imported"`
+	Skipped  int      `json:"skipped"`
+	Errors   []string `json:"errors,omitempty"`
+}
+
 type AwgInboundRuntime struct {
-	InboundID     int                `json:"inboundId"`
-	Remark        string             `json:"remark"`
-	Tag           string             `json:"tag"`
-	Port          int                `json:"port"`
-	Enable        bool               `json:"enable"`
-	InterfaceName string             `json:"interfaceName"`
-	Running       bool               `json:"running"`
-	PeerCount     int                `json:"peerCount"`
-	OnlineCount   int                `json:"onlineCount"`
-	Peers         []awg.PeerRuntime  `json:"peers"`
+	InboundID     int               `json:"inboundId"`
+	Remark        string            `json:"remark"`
+	Tag           string            `json:"tag"`
+	Port          int               `json:"port"`
+	Enable        bool              `json:"enable"`
+	InterfaceName string            `json:"interfaceName"`
+	Running       bool              `json:"running"`
+	PeerCount     int               `json:"peerCount"`
+	OnlineCount   int               `json:"onlineCount"`
+	Peers         []awg.PeerRuntime `json:"peers"`
 }
 
 func (s *AwgInboundService) Apply(inbound *model.Inbound) error {
@@ -93,20 +97,16 @@ func (s *AwgInboundService) StartupScanAndImport() {
 	if !awg.IsInstalled() {
 		return
 	}
-	setting := SettingService{}
-	done, err := setting.getString(awgScanSettingKey)
-	if err == nil && strings.TrimSpace(done) == "true" {
-		s.RestoreAll()
-		return
-	}
-	imported, scanErr := s.ImportDiscovered(false)
+	result, scanErr := s.ImportDiscovered(false)
 	if scanErr != nil {
 		logger.Warning("awg startup scan failed:", scanErr)
 	}
-	if imported > 0 {
-		logger.Infof("awg startup scan imported %d interface(s)", imported)
+	if result.Imported > 0 {
+		logger.Infof("awg startup scan imported %d interface(s)", result.Imported)
 	}
-	_ = setting.setString(awgScanSettingKey, "true")
+	for _, entry := range result.Errors {
+		logger.Warning("awg startup import:", entry)
+	}
 	s.RestoreAll()
 }
 
@@ -137,33 +137,35 @@ func (s *AwgInboundService) ListDiscovered() ([]AwgDiscoveredInterface, error) {
 	return out, nil
 }
 
-func (s *AwgInboundService) ImportDiscovered(force bool) (int, error) {
+func (s *AwgInboundService) ImportDiscovered(force bool) (AwgImportResult, error) {
+	result := AwgImportResult{}
 	discovered, err := awg.DiscoverInterfaces()
 	if err != nil {
-		return 0, err
+		return result, err
 	}
 	known := s.knownInterfaceMap()
 	inboundSvc := InboundService{}
-	imported := 0
 	for _, entry := range discovered {
 		if _, ok := known[entry.Name]; ok {
+			result.Skipped++
 			continue
 		}
 		if !force && !entry.Running && strings.TrimSpace(entry.PrivateKey) == "" {
+			result.Skipped++
 			continue
 		}
 		inbound, ierr := s.buildInboundFromParsed(entry)
 		if ierr != nil {
-			logger.Warning("awg import", entry.Name, "failed:", ierr)
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", entry.Name, ierr))
 			continue
 		}
 		if _, _, ierr = inboundSvc.AddInbound(inbound); ierr != nil {
-			logger.Warning("awg import save", entry.Name, "failed:", ierr)
+			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", entry.Name, ierr))
 			continue
 		}
-		imported++
+		result.Imported++
 	}
-	return imported, nil
+	return result, nil
 }
 
 func (s *AwgInboundService) ListRuntime() ([]AwgInboundRuntime, error) {
@@ -370,11 +372,7 @@ func (s *AwgInboundService) buildInboundFromParsed(entry awg.ParsedInterface) (*
 		"peers":        []any{},
 	}
 	if strings.TrimSpace(entry.PrivateKey) == "" {
-		priv, _, kerr := awg.GenerateKeyPair()
-		if kerr != nil {
-			return nil, kerr
-		}
-		settings["secretKey"] = priv
+		return nil, fmt.Errorf("missing private key for %s; set XUI_AWG_CONFIG_DIR or ensure awg showconf works", entry.Name)
 	}
 	settingsJSON, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
