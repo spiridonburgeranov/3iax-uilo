@@ -911,7 +911,7 @@ export default function ClientsPage() {
       align: 'center',
       render: (_v, record) => {
         const speed = clientSpeed[record.email];
-        if (!isActiveSpeed(speed)) return <Tag color="default">—</Tag>;
+        if (!isOnline(record.email) || !isActiveSpeed(speed)) return <Tag color="default">—</Tag>;
         return <ClientSpeedTag speed={speed} />;
       },
     },
@@ -1443,7 +1443,7 @@ export default function ClientsPage() {
                                   />
                                   {(() => {
                                     const speed = clientSpeed[row.email];
-                                    if (!isActiveSpeed(speed)) return null;
+                                    if (!isOnline(row.email) || !isActiveSpeed(speed)) return null;
                                     return (
                                       <div className="client-card-speed">
                                         <ClientSpeedTag speed={speed} />

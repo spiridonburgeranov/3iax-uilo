@@ -49,3 +49,21 @@ export async function fetchClientVpnUri(
   }
   return '';
 }
+
+export async function fetchClientVpnFile(
+  client: ClientRecord,
+  inbound: InboundOption,
+  host = window.location.hostname,
+  publicHost = '',
+): Promise<string> {
+  const endpointHost = resolveShareHost(inbound, inbound.nodeAddress ?? '', preferPublicHost(host, publicHost));
+  const endpoint = `${endpointHost}:${inbound.port || ''}`;
+  const path = inbound.protocol === 'amneziawg'
+    ? `/panel/api/awg/client/${inbound.id}/${encodeURIComponent(client.email)}/vpnfile`
+    : `/panel/api/clients/inbound/${inbound.id}/${encodeURIComponent(client.email)}/vpnfile`;
+  const msg = await HttpUtil.get<string>(path, { endpoint }, { silent: true });
+  if (msg.success && typeof msg.obj === 'string' && msg.obj.trim()) {
+    return msg.obj;
+  }
+  return '';
+}

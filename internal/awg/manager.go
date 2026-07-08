@@ -18,6 +18,8 @@ import (
 	wgutil "github.com/mhsanaei/3x-ui/v3/internal/util/wireguard"
 )
 
+const OnlineHandshakeSeconds = 180
+
 type ClientConfigInput struct {
 	PrivateKey        string
 	PublicKey         string
@@ -161,7 +163,7 @@ func RuntimePeers(inbound *model.Inbound) ([]PeerRuntime, error) {
 	now := time.Now().Unix()
 	out := make([]PeerRuntime, 0, len(rows))
 	for _, row := range rows {
-		online := row.LatestHandshake > 0 && now-row.LatestHandshake <= 180
+		online := row.LatestHandshake > 0 && now-row.LatestHandshake <= OnlineHandshakeSeconds
 		out = append(out, PeerRuntime{
 			InboundID:       inbound.Id,
 			InboundRemark:   inbound.Remark,
@@ -188,7 +190,7 @@ func RuntimeAllPeers() ([]PeerRuntime, error) {
 	now := time.Now().Unix()
 	out := make([]PeerRuntime, 0, len(rows))
 	for _, row := range rows {
-		online := row.LatestHandshake > 0 && now-row.LatestHandshake <= 180
+		online := row.LatestHandshake > 0 && now-row.LatestHandshake <= OnlineHandshakeSeconds
 		out = append(out, PeerRuntime{
 			InterfaceName:   row.InterfaceName,
 			PublicKey:       row.PublicKey,
@@ -212,7 +214,7 @@ func RuntimePeersFromInterface(interfaceName string) ([]PeerRuntime, error) {
 	now := time.Now().Unix()
 	out := make([]PeerRuntime, 0, len(rows))
 	for _, row := range rows {
-		online := row.LatestHandshake > 0 && now-row.LatestHandshake <= 180
+		online := row.LatestHandshake > 0 && now-row.LatestHandshake <= OnlineHandshakeSeconds
 		out = append(out, PeerRuntime{
 			InterfaceName:   row.InterfaceName,
 			PublicKey:       row.PublicKey,

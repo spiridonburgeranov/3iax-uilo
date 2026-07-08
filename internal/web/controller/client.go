@@ -52,6 +52,7 @@ func (a *ClientController) initRouter(g *gin.RouterGroup) {
 	g.GET("/subLinks/:subId", a.getSubLinks)
 	g.GET("/links/:email", a.getClientLinks)
 	g.GET("/inbound/:inboundId/:email/vpnuri", a.clientVpnURI)
+	g.GET("/inbound/:inboundId/:email/vpnfile", a.clientVpnFile)
 
 	g.POST("/add", a.create)
 	g.POST("/update/:email", a.update)
@@ -566,6 +567,39 @@ func (a *ClientController) clientVpnURI(c *gin.Context) {
 	endpoint := strings.TrimSpace(c.Query("endpoint"))
 	uri, err := a.inboundService.ClientVpnURI(a.settingService, resolveHost(c), endpoint, inbound, client)
 	jsonObj(c, uri, err)
+}
+
+func (a *ClientController) clientVpnFile(c *gin.Context) {
+	inboundID, err := strconv.Atoi(c.Param("inboundId"))
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	email := c.Param("email")
+	inbound, err := a.inboundService.GetInbound(inboundID)
+	if err != nil {
+		jsonObj(c, "", err)
+		return
+	}
+	clients, err := a.inboundService.GetClients(inbound)
+	if err != nil {
+		jsonObj(c, "", err)
+		return
+	}
+	var client *model.Client
+	for i := range clients {
+		if clients[i].Email == email {
+			client = &clients[i]
+			break
+		}
+	}
+	if client == nil {
+		jsonMsg(c, "client not found", nil)
+		return
+	}
+	endpoint := strings.TrimSpace(c.Query("endpoint"))
+	vpnFile, err := a.inboundService.ClientVpnFile(a.settingService, resolveHost(c), endpoint, inbound, client)
+	jsonObj(c, vpnFile, err)
 }
 
 func (a *ClientController) getSubLinks(c *gin.Context) {

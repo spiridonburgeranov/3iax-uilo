@@ -3,7 +3,9 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,6 +19,22 @@ import (
 )
 
 type AwgInboundService struct{}
+
+type awgPeerTotals struct {
+	up   int64
+	down int64
+}
+
+var (
+	awgTrafficMu      sync.Mutex
+	awgLastPeerTotals = map[string]awgPeerTotals{}
+)
+
+type AwgTrafficPollResult struct {
+	ClientDeltas      []*xray.ClientTraffic
+	OnlineEmails      []string
+	ActiveInboundTags []string
+}
 
 type AwgDiscoveredInterface struct {
 	Name        string `json:"name"`
@@ -125,46 +143,17 @@ type AwgProvisionResult struct {
 }
 
 func (s *AwgInboundService) ProvisionNew() (*AwgProvisionResult, error) {
-	if !awg.IsInstalled() {
-		return nil, fmt.Errorf("amneziawg runtime is not installed (missing awg/awg-quick)")
-	}
 	snapshot := s.buildResourceSnapshot()
 	plan, err := awg.BuildProvisionPlan(snapshot)
 	if err != nil {
 		return nil, err
 	}
-	settings := map[string]any{
-		"secretKey":    plan.PrivateKey,
-		"address":      plan.ServerAddress,
-		"dns":          plan.DNS,
-		"awgInterface": plan.InterfaceName,
-		"mtu":          plan.MTU,
-		"jc":           plan.Jc,
-		"jmin":         plan.Jmin,
-		"jmax":         plan.Jmax,
-		"s1":           plan.S1,
-		"s2":           plan.S2,
-		"s3":           plan.S3,
-		"s4":           plan.S4,
-		"h1":           plan.H1,
-		"h2":           plan.H2,
-		"h3":           plan.H3,
-		"h4":           plan.H4,
-		"i1":           plan.I1,
-		"i2":           plan.I2,
-		"i3":           plan.I3,
-		"i4":           plan.I4,
-		"i5":           plan.I5,
-		"postUp":       "",
-		"postDown":     "",
-		"clients":      []any{},
-		"peers":        []any{},
-	}
+	settings := awg.PlanToSettingsMap(plan)
 	return &AwgProvisionResult{
 		Remark:        "AmneziaWG " + plan.InterfaceName,
 		Port:          plan.ListenPort,
 		Enable:        true,
-		Tag:           "inbound-" + plan.InterfaceName,
+		Tag:           awg.FormatInterfaceTag(plan.InterfaceName),
 		PublicKey:     plan.PublicKey,
 		InterfaceName: plan.InterfaceName,
 		ConfigPath:    awg.ConfigPathForInterface(plan.InterfaceName),
@@ -383,15 +372,24 @@ func (s *AwgInboundService) ToggleAll(enable bool) error {
 }
 
 func (s *AwgInboundService) UpdateTrafficStats() {
+	s.PollTrafficStats()
+}
+
+func (s *AwgInboundService) PollTrafficStats() AwgTrafficPollResult {
+	result := AwgTrafficPollResult{}
 	if !awg.IsInstalled() {
-		return
+		return result
 	}
 	db := database.GetDB()
 	var inbounds []model.Inbound
 	if err := db.Where("protocol = ? AND node_id IS NULL", model.AmneziaWG).Find(&inbounds).Error; err != nil {
-		return
+		return result
 	}
 	inboundSvc := InboundService{}
+	onlineSeen := map[string]struct{}{}
+	activeTags := map[string]struct{}{}
+	awgTrafficMu.Lock()
+	defer awgTrafficMu.Unlock()
 	for i := range inbounds {
 		ib := inbounds[i]
 		peers, err := awg.RuntimePeers(&ib)
@@ -414,24 +412,66 @@ func (s *AwgInboundService) UpdateTrafficStats() {
 				emailByKey[key] = client.Email
 			}
 		}
+		tag := strings.TrimSpace(ib.Tag)
 		_ = db.Transaction(func(tx *gorm.DB) error {
 			for _, peer := range peers {
 				email := emailByKey[peer.PublicKey]
 				if email == "" {
 					continue
 				}
+				upTotal := int64(peer.TransferTx)
+				downTotal := int64(peer.TransferRx)
 				updates := map[string]any{
-					"up":   int64(peer.TransferTx),
-					"down": int64(peer.TransferRx),
+					"up":   upTotal,
+					"down": downTotal,
 				}
 				if peer.LatestHandshake > 0 {
 					updates["last_online"] = peer.LatestHandshake * 1000
 				}
 				tx.Model(&xray.ClientTraffic{}).Where("email = ?", email).Updates(updates)
+				if peer.Online {
+					onlineSeen[email] = struct{}{}
+					if tag != "" {
+						activeTags[tag] = struct{}{}
+					}
+				}
+				if !peer.Online {
+					awgLastPeerTotals[email] = awgPeerTotals{up: upTotal, down: downTotal}
+					continue
+				}
+				last, seen := awgLastPeerTotals[email]
+				awgLastPeerTotals[email] = awgPeerTotals{up: upTotal, down: downTotal}
+				if !seen || upTotal < last.up || downTotal < last.down {
+					continue
+				}
+				deltaUp := upTotal - last.up
+				deltaDown := downTotal - last.down
+				if deltaUp == 0 && deltaDown == 0 {
+					continue
+				}
+				if tag != "" {
+					activeTags[tag] = struct{}{}
+				}
+				result.ClientDeltas = append(result.ClientDeltas, &xray.ClientTraffic{
+					Email: email,
+					Up:    deltaUp,
+					Down:  deltaDown,
+				})
 			}
 			return nil
 		})
 	}
+	result.OnlineEmails = make([]string, 0, len(onlineSeen))
+	for email := range onlineSeen {
+		result.OnlineEmails = append(result.OnlineEmails, email)
+	}
+	sort.Strings(result.OnlineEmails)
+	result.ActiveInboundTags = make([]string, 0, len(activeTags))
+	for tag := range activeTags {
+		result.ActiveInboundTags = append(result.ActiveInboundTags, tag)
+	}
+	sort.Strings(result.ActiveInboundTags)
+	return result
 }
 
 func (s *AwgInboundService) ClientConfig(inbound *model.Inbound, client *model.Client, endpoint string) (string, error) {

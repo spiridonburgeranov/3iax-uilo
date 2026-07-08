@@ -65,6 +65,24 @@ func (s *InboundService) ClientVpnURI(
 	}
 }
 
+func (s *InboundService) ClientVpnFile(
+	setting SettingService,
+	host string,
+	endpoint string,
+	inbound *model.Inbound,
+	client *model.Client,
+) (string, error) {
+	uri, err := s.ClientVpnURI(setting, host, endpoint, inbound, client)
+	if err != nil {
+		return "", err
+	}
+	payload, err := vpnuri.Decode(uri)
+	if err != nil {
+		return "", err
+	}
+	return string(payload), nil
+}
+
 func (s *InboundService) clientXrayVpnURI(
 	setting SettingService,
 	host string,

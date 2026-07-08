@@ -288,7 +288,7 @@ const (
 	cadenceXrayRestart   = "@every 30s"
 	cadenceXrayTraffic   = "@every 5s"
 	cadenceMtproto       = "@every 10s"
-	cadenceAwgTraffic    = "@every 10s"
+	cadenceAwgTraffic    = "@every 5s"
 	cadenceClientIPScan  = "@every 10s"
 	cadenceNodeHeartbeat = "@every 5s"
 	cadenceNodeTraffic   = "@every 5s"

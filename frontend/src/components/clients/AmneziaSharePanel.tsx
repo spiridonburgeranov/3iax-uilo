@@ -1,4 +1,5 @@
-import { Alert, Segmented } from 'antd';
+import { DownloadOutlined } from '@ant-design/icons';
+import { Alert, Button, Segmented, Space } from 'antd';
 import { useState } from 'react';
 
 import ConfigBlock from '@/components/clients/ConfigBlock';
@@ -9,6 +10,7 @@ interface AmneziaSharePanelProps {
   label: string;
   nativeValue: string;
   vpnUri: string;
+  vpnFile?: string;
   fileName?: string;
   qrRemark?: string;
   nativeTabLabel?: string;
@@ -19,12 +21,26 @@ export default function AmneziaSharePanel({
   label,
   nativeValue,
   vpnUri,
+  vpnFile = '',
   fileName = 'config.conf',
   qrRemark = '',
   nativeTabLabel = 'Native config',
   nativeAsLink = false,
 }: AmneziaSharePanelProps) {
   const [mode, setMode] = useState<'amnezia' | 'native'>('amnezia');
+
+  const downloadVpnFile = () => {
+    if (!vpnFile.trim()) return;
+    const blob = new Blob([vpnFile], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName.endsWith('.vpn') ? fileName : fileName.replace(/\.[^.]*$/, '') + '.vpn';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="amnezia-share-panel">
@@ -47,11 +63,20 @@ export default function AmneziaSharePanel({
             description="Open Amnezia → add connection → QR code. This imports the full profile in one tap."
           />
           {vpnUri ? (
-            <QrPanel
-              value={vpnUri}
-              remark={qrRemark || 'Amnezia VPN'}
-              size={280}
-            />
+            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              <QrPanel
+                value={vpnUri}
+                remark={qrRemark || 'Amnezia VPN'}
+                size={280}
+              />
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={downloadVpnFile}
+                disabled={!vpnFile.trim()}
+              >
+                Download `.vpn` for Amnezia
+              </Button>
+            </Space>
           ) : (
             <Alert
               type="warning"

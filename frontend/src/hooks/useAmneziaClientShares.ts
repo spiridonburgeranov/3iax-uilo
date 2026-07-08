@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { inboundFromDb, type DbInboundLike } from '@/lib/xray/inbound-from-db';
 import { genAllLinks } from '@/lib/xray/inbound-link';
-import { fetchClientVpnUri, supportsAmneziaVpnUri } from '@/lib/amnezia/share';
+import { fetchClientVpnFile, fetchClientVpnUri, supportsAmneziaVpnUri } from '@/lib/amnezia/share';
 import type { ClientRecord, InboundOption } from '@/hooks/useClients';
 
 export interface AmneziaShareItem {
@@ -10,6 +10,7 @@ export interface AmneziaShareItem {
   label: string;
   nativeValue: string;
   vpnUri: string;
+  vpnFile: string;
   nativeAsLink: boolean;
 }
 
@@ -38,6 +39,7 @@ export function useAmneziaClientShares(
           && ib.protocol !== 'amneziawg');
       const loaded = await Promise.all(inbounds.map(async (inbound) => {
         const vpnUri = await fetchClientVpnUri(client, inbound, window.location.hostname, publicHost);
+        const vpnFile = await fetchClientVpnFile(client, inbound, window.location.hostname, publicHost);
         let nativeValue = '';
         let nativeAsLink = false;
         if (inbound.protocol === 'wireguard' || inbound.protocol === 'amneziawg') {
@@ -70,11 +72,12 @@ export function useAmneziaClientShares(
           label: inbound.remark || inbound.tag || protocol,
           nativeValue,
           vpnUri,
+          vpnFile,
           nativeAsLink,
         };
       }));
       if (!cancelled) {
-        setItems(loaded.filter((item) => item.vpnUri || item.nativeValue));
+        setItems(loaded.filter((item) => item.vpnUri || item.vpnFile || item.nativeValue));
         setLoading(false);
       }
     })();

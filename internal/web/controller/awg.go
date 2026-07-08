@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	amneziavpn "github.com/mhsanaei/3x-ui/v3/internal/amnezia/vpnuri"
 	"github.com/mhsanaei/3x-ui/v3/internal/awg"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
@@ -32,6 +33,7 @@ func (a *AwgController) initRouter(g *gin.RouterGroup) {
 	g.GET("/server/status", a.serverStatus)
 	g.GET("/client/:inboundId/:email/config", a.clientConfig)
 	g.GET("/client/:inboundId/:email/vpnuri", a.clientVpnURI)
+	g.GET("/client/:inboundId/:email/vpnfile", a.clientVpnFile)
 }
 
 func (a *AwgController) provisionNew(c *gin.Context) {
@@ -171,4 +173,47 @@ func (a *AwgController) clientVpnURI(c *gin.Context) {
 	endpoint := c.Query("endpoint")
 	uri, err := a.awgInboundService.ClientVpnURI(inbound, client, endpoint)
 	jsonObj(c, uri, err)
+}
+
+func (a *AwgController) clientVpnFile(c *gin.Context) {
+	inboundID, err := strconv.Atoi(c.Param("inboundId"))
+	if err != nil {
+		jsonMsg(c, "invalid inbound id", err)
+		return
+	}
+	email := c.Param("email")
+	inbound, err := a.inboundService.GetInbound(inboundID)
+	if err != nil {
+		jsonObj(c, "", err)
+		return
+	}
+	clients, err := a.inboundService.GetClients(inbound)
+	if err != nil {
+		jsonObj(c, "", err)
+		return
+	}
+	var client *model.Client
+	for i := range clients {
+		if clients[i].Email == email {
+			client = &clients[i]
+			break
+		}
+	}
+	if client == nil {
+		jsonMsg(c, "client not found", err)
+		return
+	}
+	endpoint := c.Query("endpoint")
+	vpnURI, err := a.awgInboundService.ClientVpnURI(inbound, client, endpoint)
+	if err != nil {
+		jsonObj(c, "", err)
+		return
+	}
+	payload, err := amneziavpn.Decode(vpnURI)
+	if err != nil {
+		jsonObj(c, "", err)
+		return
+	}
+	vpnFile := string(payload)
+	jsonObj(c, vpnFile, err)
 }

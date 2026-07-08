@@ -4,6 +4,7 @@ import { ImportOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 
 import { HttpUtil } from '@/utils';
+import { buildLocalAwgProvision } from '@/lib/awg/provision';
 
 interface AwgDiscovered {
   name: string;
@@ -47,6 +48,9 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
   const [provision, setProvision] = useState<AwgProvisionResult | null>(null);
   const serverAddress = Form.useWatch(['settings', 'address'], form) as string | undefined;
   const obfuscationJc = Form.useWatch(['settings', 'jc'], form) as number | undefined;
+  const obfuscationDns = Form.useWatch(['settings', 'dns'], form) as string | undefined;
+  const obfuscationH1 = Form.useWatch(['settings', 'h1'], form) as string | undefined;
+  const obfuscationI1 = Form.useWatch(['settings', 'i1'], form) as string | undefined;
 
   const pendingAdopt = useMemo(
     () => discovered.filter((item) => !item.imported),
@@ -70,11 +74,15 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
     setLoading(true);
     try {
       const msg = await HttpUtil.get('/panel/api/awg/provision/new', undefined, { silent: true });
-      if (!msg?.success || !msg.obj) {
-        messageApi.error('Unable to prepare AWGv2 interface');
+      if (msg?.success && msg.obj) {
+        applyProvision(msg.obj as AwgProvisionResult, keepRemark);
         return;
       }
-      applyProvision(msg.obj as AwgProvisionResult, keepRemark);
+      applyProvision(buildLocalAwgProvision(), keepRemark);
+      messageApi.warning('Panel host could not reach awg runtime — generated AWG plan locally');
+    } catch {
+      applyProvision(buildLocalAwgProvision(), keepRemark);
+      messageApi.warning('Panel host could not reach awg runtime — generated AWG plan locally');
     } finally {
       setLoading(false);
     }
@@ -152,7 +160,14 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
           <Descriptions.Item label="Interface">{provision.interfaceName}</Descriptions.Item>
           <Descriptions.Item label="UDP port">{provision.port}</Descriptions.Item>
           <Descriptions.Item label="Server address">{serverAddress || provision.settings.address as string}</Descriptions.Item>
-          <Descriptions.Item label="Obfuscation">Jc={String(obfuscationJc ?? provision.settings.jc)} · AWG 2.0 CPS enabled</Descriptions.Item>
+          <Descriptions.Item label="DNS">{obfuscationDns || provision.settings.dns as string}</Descriptions.Item>
+          <Descriptions.Item label="Obfuscation">
+            Jc={String(obfuscationJc ?? provision.settings.jc)}
+            {' · '}
+            H1={obfuscationH1 || String(provision.settings.h1)}
+            {' · '}
+            CPS I1={obfuscationI1 || String(provision.settings.i1)}
+          </Descriptions.Item>
           <Descriptions.Item label="Config file">{provision.configPath}</Descriptions.Item>
           <Descriptions.Item label="Public key">{provision.publicKey}</Descriptions.Item>
         </Descriptions>
@@ -167,7 +182,7 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
       )}
 
       <Collapse
-        defaultActiveKey={mode === 'edit' ? ['runtime'] : []}
+        defaultActiveKey={mode === 'create' ? ['runtime', 'obfuscation'] : ['runtime']}
         items={[
           {
             key: 'runtime',
@@ -202,7 +217,7 @@ export default function AmneziawgFields({ wgPubKey, regenInboundWg, mode }: Amne
                   <InputNumber min={1280} style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item name={['settings', 'dns']} label={t('pages.inbounds.info.dns')}>
-                  <Input placeholder="1.1.1.1, 1.0.0.1" />
+                  <Input placeholder="1.1.1.1,2606:4700:4700::1111" />
                 </Form.Item>
                 <Form.Item name={['settings', 'externalInterface']} label="External interface">
                   <Input placeholder="eth0" />

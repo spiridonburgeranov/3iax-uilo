@@ -79,6 +79,7 @@ const DEFAULT_SUMMARY: ClientsSummary = {
 export interface ClientSpeedEntry {
   up: number;
   down: number;
+  at?: number;
 }
 
 type ClientStatRow = ClientTraffic & { email?: string };
@@ -558,15 +559,21 @@ export function useClients() {
       queryClient.setQueryData(keys.clients.onlines(), p.onlineClients);
     }
     if (Array.isArray(p.clientTraffics)) {
-      const next: Record<string, ClientSpeedEntry> = {};
-      for (const ct of p.clientTraffics) {
-        if (!ct || !ct.email) continue;
-        next[ct.email] = {
-          up: (ct.up || 0) / TRAFFIC_POLL_INTERVAL_S,
-          down: (ct.down || 0) / TRAFFIC_POLL_INTERVAL_S,
-        };
-      }
-      setClientSpeed(next);
+      const now = Date.now();
+      setClientSpeed((prev) => {
+        const next = { ...prev };
+        for (const ct of p.clientTraffics!) {
+          if (!ct || !ct.email) continue;
+          const up = (ct.up || 0) / TRAFFIC_POLL_INTERVAL_S;
+          const down = (ct.down || 0) / TRAFFIC_POLL_INTERVAL_S;
+          if (up === 0 && down === 0) {
+            delete next[ct.email];
+            continue;
+          }
+          next[ct.email] = { up, down, at: now };
+        }
+        return next;
+      });
     }
   }, [queryClient]);
 

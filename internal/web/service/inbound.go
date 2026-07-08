@@ -766,6 +766,9 @@ func (s *InboundService) addInbound(inbound *model.Inbound, opts inboundPersistO
 	if err := normalizeInboundShareAddressStrict(inbound); err != nil {
 		return inbound, false, err
 	}
+	if err := s.normalizeAmneziawgInbound(inbound); err != nil {
+		return inbound, false, err
+	}
 
 	conflict, err := s.checkPortConflict(inbound, 0)
 	if err != nil {
@@ -1204,6 +1207,9 @@ func (s *InboundService) UpdateInbound(inbound *model.Inbound) (*model.Inbound, 
 	s.normalizeStreamSettings(inbound)
 	s.normalizeMtprotoSecret(inbound)
 	inbound.SubSortIndex = normalizeSubSortIndex(inbound.SubSortIndex)
+	if err := s.normalizeAmneziawgInbound(inbound); err != nil {
+		return inbound, false, err
+	}
 
 	conflict, err := s.checkPortConflict(inbound, inbound.Id)
 	if err != nil {

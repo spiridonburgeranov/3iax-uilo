@@ -1052,7 +1052,7 @@ func (s *InboundService) getAwgOnlineClients() []string {
 		}
 	}
 	db := database.GetDB()
-	threshold := time.Now().Add(-3 * time.Minute).UnixMilli()
+	threshold := time.Now().Add(-time.Duration(awg.OnlineHandshakeSeconds) * time.Second).UnixMilli()
 	var legacy []string
 	if err := db.Model(&model.AwgClient{}).
 		Where("enable = ? AND last_online > ?", true, threshold).

@@ -515,6 +515,7 @@ export default function ClientInfoModal({
                       label={t('pages.clients.config')}
                       nativeValue={cfg.text}
                       vpnUri={cfg.vpnUri}
+                      vpnFile={cfg.vpnFile}
                       fileName={`${client.email}-${cfg.label.toLowerCase().replace(/\s+/g, '-')}.conf`}
                       qrRemark={client.email || 'peer'}
                       nativeTabLabel={amneziaNativeTabLabel(cfg.protocol)}
@@ -533,6 +534,7 @@ export default function ClientInfoModal({
                       label={share.label}
                       nativeValue={share.nativeValue}
                       vpnUri={share.vpnUri}
+                      vpnFile={share.vpnFile}
                       qrRemark={client.email || share.label}
                       nativeTabLabel={amneziaNativeTabLabel(share.protocol)}
                       nativeAsLink={share.nativeAsLink}

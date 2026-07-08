@@ -903,6 +903,17 @@ export const sections: readonly Section[] = [
         ],
         response: '{\n  "success": true,\n  "obj": "vpn://..."\n}',
       },
+      {
+        method: 'GET',
+        path: '/panel/api/clients/inbound/:inboundId/:email/vpnfile',
+        summary: 'Return the native Amnezia .vpn profile JSON for direct import/export.',
+        params: [
+          { name: 'inboundId', in: 'path', type: 'integer', desc: 'Inbound ID attached to the client.' },
+          { name: 'email', in: 'path', type: 'string', desc: 'Client email on that inbound.' },
+          { name: 'endpoint', in: 'query', type: 'string', desc: 'Public host:port override for the client endpoint.' },
+        ],
+        response: '{\n  "success": true,\n  "obj": "{\\"containers\\":[...],\\"defaultContainer\\":\\"amnezia-xray\\"}"\n}',
+      },
     ],
   },
 
@@ -1550,6 +1561,16 @@ export const sections: readonly Section[] = [
         method: 'GET',
         path: '/panel/api/awg/client/:inboundId/:email/vpnuri',
         summary: 'Return a vpn:// import URI for the Amnezia VPN mobile/desktop app.',
+        params: [
+          { name: 'inboundId', in: 'path', type: 'integer', desc: 'AmneziaWG inbound ID.' },
+          { name: 'email', in: 'path', type: 'string', desc: 'Client email.' },
+          { name: 'endpoint', in: 'query', type: 'string', desc: 'Optional endpoint host:port override.' },
+        ],
+      },
+      {
+        method: 'GET',
+        path: '/panel/api/awg/client/:inboundId/:email/vpnfile',
+        summary: 'Return the native Amnezia .vpn profile JSON for an AWG client.',
         params: [
           { name: 'inboundId', in: 'path', type: 'integer', desc: 'AmneziaWG inbound ID.' },
           { name: 'email', in: 'path', type: 'string', desc: 'Client email.' },
