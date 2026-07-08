@@ -233,6 +233,42 @@ prompt_or_default() {
     fi
 }
 
+resolve_install_mode() {
+    local mode="${XUI_INSTALL_MODE:-}"
+    case "$mode" in
+        clean | upgrade)
+            echo "$mode"
+            return
+            ;;
+        "")
+            ;;
+        *)
+            echo -e "${yellow}Unknown XUI_INSTALL_MODE=${mode}; using upgrade.${plain}" >&2
+            echo "upgrade"
+            return
+            ;;
+    esac
+    if [[ ! -e "${xui_folder}/" && ! -x /usr/bin/x-ui && ! -e /etc/x-ui ]]; then
+        echo "clean"
+        return
+    fi
+    if [[ "$NONINTERACTIVE" == "1" ]]; then
+        echo "upgrade"
+        return
+    fi
+    echo -e "${yellow}Existing x-ui installation detected.${plain}" >&2
+    echo -e "${green}1.${plain} Upgrade over it and keep database/settings (recommended)" >&2
+    echo -e "${green}2.${plain} Clean install and remove existing /etc/x-ui data" >&2
+    local choice
+    echo -n "Choose install mode [1]: " >&2
+    read -r choice
+    if [[ "$choice" == "2" ]]; then
+        echo "clean"
+    else
+        echo "upgrade"
+    fi
+}
+
 # write_install_result <user> <pass> <port> <webpath> <scheme> <host> <token> <dbtype>
 # Persists a parseable, root-only credentials file consumed by cloud-init/MOTD.
 # Values are written with printf '%q' so a pinned password/username containing
@@ -1484,6 +1520,9 @@ _install_xui_service_unit() {
 
 install_x-ui() {
     cd ${xui_folder%/x-ui}/
+    local install_mode
+    install_mode=$(resolve_install_mode)
+    echo -e "${green}Install mode: ${install_mode}${plain}"
 
     # Download resources
     if [ $# == 0 ]; then
@@ -1561,6 +1600,10 @@ install_x-ui() {
         # The freshly installed panel respawns a clean mtg per inbound on start.
         pkill -f 'mtg-linux-[^ ]* run ' > /dev/null 2>&1 || true
         rm ${xui_folder}/ -rf
+    fi
+    if [[ "$install_mode" == "clean" ]]; then
+        rm -rf /etc/x-ui
+        rm -f /etc/default/x-ui /etc/conf.d/x-ui /etc/sysconfig/x-ui
     fi
 
     # Extract resources and set permissions
