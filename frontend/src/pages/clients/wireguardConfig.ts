@@ -144,8 +144,8 @@ export async function fetchAmneziawgClientConfig(
 export async function fetchAmneziawgVpnUri(
   client: ClientRecord,
   inbound: InboundOption,
-  host = window.location.hostname,
-  publicHost = '',
+  _host = window.location.hostname,
+  _publicHost = '',
 ): Promise<string> {
   const msg = await HttpUtil.get<string>(
     `/panel/api/awg/client/${inbound.id}/${encodeURIComponent(client.email)}/vpnuri`,

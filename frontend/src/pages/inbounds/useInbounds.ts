@@ -242,11 +242,6 @@ export function useInbounds() {
       // the master-local synthetic id for an old-build node without one (#4983).
       const guid = dbInbound.originNodeGuid || (dbInbound.nodeId != null ? `node:${dbInbound.nodeId}` : '');
       const nodeOnline = onlineByGuidRef.current.get(guid);
-      const skipInboundActiveGate = dbInbound.protocol === Protocols.AMNEZIAWG;
-      // A node absent from the active map reports no per-inbound activity, so
-      // leave its inbounds ungated. When present, only mark a client online on
-      // this inbound if its tag actually carried traffic — that's what stops a
-      // multi-inbound client lighting up every inbound it's attached to.
       const activeForNode = activeByGuidRef.current.get(guid);
       const inboundActive = activeForNode === undefined || !dbInbound.tag || activeForNode.has(dbInbound.tag);
 
@@ -274,7 +269,7 @@ export function useInbounds() {
             continue;
           }
           active.push(client.email);
-          if ((skipInboundActiveGate || inboundActive) && nodeOnline?.has(client.email)) online.push(client.email);
+          if (inboundActive && nodeOnline?.has(client.email)) online.push(client.email);
           if (stats) {
             const expiringSoon =
               (stats.expiryTime > 0 && stats.expiryTime - now < expireDiffRef.current) ||

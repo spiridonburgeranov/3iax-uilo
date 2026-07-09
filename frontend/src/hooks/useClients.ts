@@ -10,6 +10,7 @@ import {
   ClientPageResponseSchema,
   InboundOptionsSchema,
   OnlinesSchema,
+  ActiveInboundsByNodeSchema,
   BulkAdjustResultSchema,
   BulkAttachResultSchema,
   BulkCreateResultSchema,
@@ -33,6 +34,7 @@ import {
 } from '@/schemas/client';
 import { DefaultsPayloadSchema } from '@/schemas/defaults';
 import { TRAFFIC_POLL_INTERVAL_S } from '@/lib/traffic/poll-interval';
+import { resolveSessionInboundIds, toGuidTagMap } from '@/lib/traffic/session-inbound';
 
 // One row sent to POST /clients/:email/externalLinks.
 export type ExternalLinkInput = { kind: 'link' | 'subscription'; value: string; remark: string };
@@ -226,6 +228,27 @@ export function useClients() {
     staleTime: Infinity,
   });
 
+  const activeInboundsQuery = useQuery({
+    queryKey: keys.clients.activeInbounds(),
+    queryFn: async () => {
+      const msg = await HttpUtil.post('/panel/api/clients/activeInbounds', undefined, { silent: true });
+      if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch activeInbounds');
+      const validated = parseMsg(msg, ActiveInboundsByNodeSchema, 'clients/activeInbounds');
+      return (validated.obj && typeof validated.obj === 'object')
+        ? (validated.obj as Record<string, string[]>)
+        : {};
+    },
+    staleTime: Infinity,
+  });
+
+  const [activeByGuid, setActiveByGuid] = useState<Map<string, Set<string>>>(() => new Map());
+
+  useEffect(() => {
+    if (activeInboundsQuery.data) {
+      setActiveByGuid(toGuidTagMap(activeInboundsQuery.data));
+    }
+  }, [activeInboundsQuery.data]);
+
   const clients = listQuery.data?.items ?? [];
   const total = listQuery.data?.total ?? 0;
   const filtered = listQuery.data?.filtered ?? 0;
@@ -239,6 +262,15 @@ export function useClients() {
 
   const inbounds = inboundOptionsQuery.data ?? [];
   const onlines = useMemo(() => onlinesQuery.data ?? [], [onlinesQuery.data]);
+  const onlineSet = useMemo(() => new Set(onlines), [onlines]);
+
+  const getSessionInboundIds = useCallback((email: string, inboundIds: number[] | undefined) => {
+    const inboundsById: Record<number, InboundOption> = {};
+    for (const ib of inbounds) {
+      if (ib?.id != null) inboundsById[ib.id] = ib;
+    }
+    return resolveSessionInboundIds(email, inboundIds ?? [], inboundsById, onlineSet, activeByGuid);
+  }, [inbounds, onlineSet, activeByGuid]);
 
   const defaults = defaultsQuery.data ?? {};
   const subSettings: SubSettings = useMemo(() => ({
@@ -285,6 +317,7 @@ export function useClients() {
       setAllClientStats([]);
       return Promise.all([
         queryClient.invalidateQueries({ queryKey: keys.clients.root() }),
+        queryClient.invalidateQueries({ queryKey: keys.clients.activeInbounds() }),
         queryClient.invalidateQueries({ queryKey: keys.inbounds.root() }),
         queryClient.invalidateQueries({ queryKey: keys.xray.config() }),
       ]);
@@ -553,10 +586,15 @@ export function useClients() {
     if (!payload || typeof payload !== 'object') return;
     const p = payload as {
       onlineClients?: string[];
+      activeInbounds?: Record<string, string[]>;
       clientTraffics?: { email: string; up: number; down: number }[];
     };
     if (Array.isArray(p.onlineClients)) {
       queryClient.setQueryData(keys.clients.onlines(), p.onlineClients);
+    }
+    if (p.activeInbounds && typeof p.activeInbounds === 'object') {
+      queryClient.setQueryData(keys.clients.activeInbounds(), p.activeInbounds);
+      setActiveByGuid(toGuidTagMap(p.activeInbounds));
     }
     if (Array.isArray(p.clientTraffics)) {
       const now = Date.now();
@@ -658,6 +696,7 @@ export function useClients() {
     importClients,
     setEnable,
     clientSpeed,
+    getSessionInboundIds,
     applyTrafficEvent,
     applyClientStatsEvent,
   };

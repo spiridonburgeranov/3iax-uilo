@@ -17,6 +17,11 @@ func NewAwgTrafficJob() *AwgTrafficJob {
 
 func (j *AwgTrafficJob) Run() {
 	poll := j.awgInboundService.PollTrafficStats()
+	if len(poll.InboundTraffics) > 0 {
+		if _, _, err := j.inboundService.AddTraffic(poll.InboundTraffics, nil); err != nil {
+			logger.Warning("awg traffic job: add inbound traffic failed:", err)
+		}
+	}
 	j.inboundService.RefreshLocalOnlineClients(poll.OnlineEmails, poll.ActiveInboundTags)
 	if !websocket.HasClients() {
 		return
@@ -30,9 +35,21 @@ func (j *AwgTrafficJob) Run() {
 		"onlineByGuid":   j.inboundService.GetOnlineClientsByGuid(),
 		"activeInbounds": j.inboundService.GetActiveInboundsByGuid(),
 	}
+	if len(poll.InboundTraffics) > 0 {
+		payload["traffics"] = poll.InboundTraffics
+	}
 	if len(poll.ClientDeltas) > 0 {
 		payload["clientTraffics"] = poll.ClientDeltas
 		logger.Debugf("awg traffic poll: %d client delta(s)", len(poll.ClientDeltas))
 	}
 	websocket.BroadcastTraffic(payload)
+
+	if summary, err := j.inboundService.GetInboundsTrafficSummary(); err != nil {
+		logger.Warning("awg traffic job: inbound summary for websocket failed:", err)
+	} else if len(summary) > 0 {
+		websocket.BroadcastClientStats(map[string]any{
+			"snapshot": false,
+			"inbounds": summary,
+		})
+	}
 }

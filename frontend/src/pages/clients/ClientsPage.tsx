@@ -56,10 +56,16 @@ import { useTheme } from '@/hooks/useTheme';
 import { formatInboundLabel } from '@/lib/inbounds/label';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useWebSocket } from '@/hooks/useWebSocket';
-import { useClients } from '@/hooks/useClients';
+import { protocolLabel } from '@/lib/traffic/session-inbound';
 import { useNodesQuery } from '@/api/queries/useNodesQuery';
 import { useDatepicker } from '@/hooks/useDatepicker';
-import type { ClientRecord, InboundOption, ExternalLink, ExternalLinkInput } from '@/hooks/useClients';
+import {
+  useClients,
+  type ClientRecord,
+  type InboundOption,
+  type ExternalLink,
+  type ExternalLinkInput,
+} from '@/hooks/useClients';
 import ClientTrafficCell from '@/components/clients/ClientTrafficCell';
 import ClientSpeedTag, { isActiveSpeed } from '@/components/clients/ClientSpeedTag';
 import AppSidebar from '@/layouts/AppSidebar';
@@ -140,6 +146,8 @@ const INBOUND_PROTOCOL_COLORS: Record<string, string> = {
   hysteria: 'cyan',
   hysteria2: 'green',
   wireguard: 'gold',
+  amneziawg: 'cyan',
+  mtproto: 'purple',
   http: 'purple',
   mixed: 'lime',
   tunnel: 'orange',
@@ -211,6 +219,7 @@ export default function ClientsPage() {
     create, update, remove, bulkDelete, bulkAdjust, bulkEnable, bulkDisable, bulkAddToGroup, bulkRemoveFromGroup, attach, setExternalLinks, bulkAttach, detach, bulkDetach,
     resetTraffic, resetAllTraffics, delDepleted, delOrphans, exportClients, importClients, setEnable,
     clientSpeed,
+    getSessionInboundIds,
     applyTrafficEvent, applyClientStatsEvent,
     refresh,
     hydrate,
@@ -798,9 +807,25 @@ export default function ClientsPage() {
             <Tag color="red">{t('depleted')}</Tag>
           </Tooltip>
         );
-        if (record.enable && isOnline(record.email)) return (
-          <Tag color="green" className="dot-tag"><span className="online-dot" />{t('pages.clients.online')}</Tag>
-        );
+        if (record.enable && isOnline(record.email)) {
+          const sessionIds = getSessionInboundIds(record.email, record.inboundIds);
+          const sessionProto = sessionIds.length === 1
+            ? protocolLabel(inboundsById[sessionIds[0]!]?.protocol)
+            : '';
+          return (
+            <Space size={4} wrap>
+              <Tag color="green" className="dot-tag">
+                <span className="online-dot" />
+                {t('pages.clients.online')}
+              </Tag>
+              {sessionProto ? (
+                <Tag color={INBOUND_PROTOCOL_COLORS[(inboundsById[sessionIds[0]!]?.protocol || '').toLowerCase()] ?? 'blue'}>
+                  {sessionProto}
+                </Tag>
+              ) : null}
+            </Space>
+          );
+        }
         if (!record.enable) return <Tag>{t('disabled')}</Tag>;
         if (bucket === 'expiring') return <Tag color="orange">{t('depletingSoon')}</Tag>;
         return (
@@ -853,6 +878,7 @@ export default function ClientsPage() {
       render: (_v, record) => {
         const ids = record.inboundIds || [];
         if (ids.length === 0) return <span style={{ color: 'rgba(0,0,0,0.45)' }}>—</span>;
+        const sessionSet = new Set(getSessionInboundIds(record.email, ids));
         const visible = ids.slice(0, INBOUND_CHIP_LIMIT);
         const overflow = ids.slice(INBOUND_CHIP_LIMIT);
         const chip = (id: number, compact: boolean) => {
@@ -860,9 +886,17 @@ export default function ClientsPage() {
           const proto = (ib?.protocol || '').toLowerCase();
           const color = INBOUND_PROTOCOL_COLORS[proto] ?? 'default';
           const compactLabel = formatInboundLabel(ib?.tag, ib?.remark);
+          const active = sessionSet.has(id);
           return (
-            <Tooltip key={id} title={inboundLabel(id)}>
-              <Tag color={color} style={{ margin: 2 }}>
+            <Tooltip key={id} title={active ? `${inboundLabel(id)} · ${protocolLabel(ib?.protocol)}` : inboundLabel(id)}>
+              <Tag
+                color={color}
+                style={{
+                  margin: 2,
+                  outline: active ? '2px solid var(--ant-color-success)' : undefined,
+                  fontWeight: active ? 600 : undefined,
+                }}
+              >
                 {compact ? compactLabel : inboundLabel(id)}
               </Tag>
             </Tooltip>
@@ -932,7 +966,7 @@ export default function ClientsPage() {
       ),
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [t, togglingEmail, clientBucket, isOnline, inboundsById, filters, allGroups, datepicker, trafficDiff, clientSpeed]);
+  ], [t, togglingEmail, clientBucket, isOnline, inboundsById, filters, allGroups, datepicker, trafficDiff, clientSpeed, getSessionInboundIds]);
 
   const tablePagination = {
     current: currentPage,

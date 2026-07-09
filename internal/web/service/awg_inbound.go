@@ -32,6 +32,7 @@ var (
 
 type AwgTrafficPollResult struct {
 	ClientDeltas      []*xray.ClientTraffic
+	InboundTraffics   []*xray.Traffic
 	OnlineEmails      []string
 	ActiveInboundTags []string
 }
@@ -413,6 +414,7 @@ func (s *AwgInboundService) PollTrafficStats() AwgTrafficPollResult {
 			}
 		}
 		tag := strings.TrimSpace(ib.Tag)
+		var inboundUp, inboundDown int64
 		_ = db.Transaction(func(tx *gorm.DB) error {
 			for _, peer := range peers {
 				email := emailByKey[peer.PublicKey]
@@ -449,6 +451,8 @@ func (s *AwgInboundService) PollTrafficStats() AwgTrafficPollResult {
 				if deltaUp == 0 && deltaDown == 0 {
 					continue
 				}
+				inboundUp += deltaUp
+				inboundDown += deltaDown
 				if tag != "" {
 					activeTags[tag] = struct{}{}
 				}
@@ -460,6 +464,14 @@ func (s *AwgInboundService) PollTrafficStats() AwgTrafficPollResult {
 			}
 			return nil
 		})
+		if tag != "" && (inboundUp > 0 || inboundDown > 0) {
+			result.InboundTraffics = append(result.InboundTraffics, &xray.Traffic{
+				IsInbound: true,
+				Tag:       tag,
+				Up:        inboundUp,
+				Down:      inboundDown,
+			})
+		}
 	}
 	result.OnlineEmails = make([]string, 0, len(onlineSeen))
 	for email := range onlineSeen {
