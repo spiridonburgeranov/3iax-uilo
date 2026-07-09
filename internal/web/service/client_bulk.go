@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -443,6 +444,11 @@ func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, 
 	}
 
 	adjusted := map[string]struct{}{}
+	type trafficAdjust struct {
+		email   string
+		updates map[string]any
+	}
+	toAdjust := make([]trafficAdjust, 0, len(plan))
 	for email, entry := range plan {
 		if _, skipped := skippedReasons[email]; skipped {
 			continue
@@ -455,17 +461,33 @@ func (s *ClientService) BulkAdjust(inboundSvc *InboundService, emails []string, 
 			updates["total"] = entry.newTotal
 		}
 		if len(updates) > 0 {
-			if err := db.Model(xray.ClientTraffic{}).Where("email = ?", email).Updates(updates).Error; err != nil {
-				if _, already := skippedReasons[email]; !already {
-					skippedReasons[email] = err.Error()
-				}
-				continue
-			}
+			toAdjust = append(toAdjust, trafficAdjust{email: email, updates: updates})
 		}
 		// Counted when expiry/total changed, or a flow directive was honored
 		// for this client (flow lives in the inbound JSON, not ClientTraffic).
 		if len(updates) > 0 || flowHonored[email] {
 			adjusted[email] = struct{}{}
+		}
+	}
+	if len(toAdjust) > 0 {
+		adjustments := toAdjust
+		if err := submitTrafficWrite(func() error {
+			sort.Slice(adjustments, func(i, j int) bool {
+				return adjustments[i].email < adjustments[j].email
+			})
+			for _, adj := range adjustments {
+				if err := db.Model(xray.ClientTraffic{}).Where("email = ?", adj.email).Updates(adj.updates).Error; err != nil {
+					return err
+				}
+			}
+			return nil
+		}); err != nil {
+			for _, adj := range adjustments {
+				if _, already := skippedReasons[adj.email]; !already {
+					skippedReasons[adj.email] = err.Error()
+				}
+				delete(adjusted, adj.email)
+			}
 		}
 	}
 	result.Adjusted = len(adjusted)

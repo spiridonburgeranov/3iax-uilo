@@ -54,6 +54,7 @@ func (s *InboundService) addTrafficLocked(inboundTraffics []*xray.Traffic, clien
 	needRestart0, count, err := s.autoRenewClients(tx)
 	if err != nil {
 		logger.Warning("Error in renew clients:", err)
+		return false, false, err
 	} else if count > 0 {
 		logger.Debugf("%v clients renewed", count)
 	}
@@ -62,6 +63,7 @@ func (s *InboundService) addTrafficLocked(inboundTraffics []*xray.Traffic, clien
 	needRestart1, count, err := s.disableInvalidClients(tx)
 	if err != nil {
 		logger.Warning("Error in disabling invalid clients:", err)
+		return false, false, err
 	} else if count > 0 {
 		logger.Debugf("%v clients disabled", count)
 		disabledClientsCount = count
@@ -70,6 +72,7 @@ func (s *InboundService) addTrafficLocked(inboundTraffics []*xray.Traffic, clien
 	needRestart2, count, err := s.disableInvalidInbounds(tx)
 	if err != nil {
 		logger.Warning("Error in disabling invalid inbounds:", err)
+		return false, false, err
 	} else if count > 0 {
 		logger.Debugf("%v inbounds disabled", count)
 	}
@@ -146,6 +149,9 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 	// on PostgreSQL two transactions locking the same rows in opposite order
 	// deadlock. An atomic "SET up = up + ?" never holds a row lock across a
 	// subsequent lock acquisition, so concurrent writers cannot deadlock.
+	slices.SortFunc(dbClientTraffics, func(a, b *xray.ClientTraffic) int {
+		return strings.Compare(a.Email, b.Email)
+	})
 	for _, ct := range dbClientTraffics {
 		t, ok := trafficByEmail[ct.Email]
 		if !ok || (t.Up == 0 && t.Down == 0) {
@@ -161,6 +167,7 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 			t.Up, t.Down, now, ct.Email,
 		).Error; err != nil {
 			logger.Warning("AddClientTraffic update data ", err)
+			return err
 		}
 	}
 
@@ -175,6 +182,7 @@ func (s *InboundService) addClientTraffic(tx *gorm.DB, traffics []*xray.ClientTr
 			convertedExpiryByEmail[email], email,
 		).Error; err != nil {
 			logger.Warning("AddClientTraffic update expiry_time ", err)
+			return err
 		}
 	}
 
@@ -265,19 +273,20 @@ func (s *InboundService) adjustTraffics(tx *gorm.DB, dbClientTraffics []*xray.Cl
 	if err != nil {
 		logger.Warning("AddClientTraffic update inbounds ", err)
 		logger.Error(inbounds)
-	} else {
-		for _, ib := range inbounds {
-			if ib == nil {
-				continue
-			}
-			cs, gcErr := s.GetClients(ib)
-			if gcErr != nil {
-				logger.Warning("AddClientTraffic sync clients: GetClients failed", gcErr)
-				continue
-			}
-			if syncErr := s.clientService.SyncInbound(tx, ib.Id, cs); syncErr != nil {
-				logger.Warning("AddClientTraffic sync clients: SyncInbound failed", syncErr)
-			}
+		return nil, nil, err
+	}
+	for _, ib := range inbounds {
+		if ib == nil {
+			continue
+		}
+		cs, gcErr := s.GetClients(ib)
+		if gcErr != nil {
+			logger.Warning("AddClientTraffic sync clients: GetClients failed", gcErr)
+			return nil, nil, gcErr
+		}
+		if syncErr := s.clientService.SyncInbound(tx, ib.Id, cs); syncErr != nil {
+			logger.Warning("AddClientTraffic sync clients: SyncInbound failed", syncErr)
+			return nil, nil, syncErr
 		}
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -139,7 +140,31 @@ func safeApply(fn func() error) (err error) {
 	return fn()
 }
 
+func isPgDeadlock(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "40p01") || strings.Contains(msg, "deadlock detected")
+}
+
 func submitTrafficWrite(fn func() error) error {
+	const maxAttempts = 3
+	var lastErr error
+	for attempt := range maxAttempts {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 25 * time.Millisecond)
+		}
+		lastErr = submitTrafficWriteOnce(fn)
+		if lastErr == nil || !isPgDeadlock(lastErr) {
+			return lastErr
+		}
+		logger.Debug("traffic write deadlock, retrying:", lastErr)
+	}
+	return lastErr
+}
+
+func submitTrafficWriteOnce(fn func() error) error {
 	req := &trafficWriteRequest{apply: fn, done: make(chan error, 1)}
 
 	twMu.Lock()

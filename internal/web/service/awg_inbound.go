@@ -25,6 +25,14 @@ type awgPeerTotals struct {
 	down int64
 }
 
+type awgClientTrafficWrite struct {
+	email      string
+	up         int64
+	down       int64
+	lastOnline int64
+	hasLast    bool
+}
+
 var (
 	awgTrafficMu      sync.Mutex
 	awgLastPeerTotals = map[string]awgPeerTotals{}
@@ -390,6 +398,7 @@ func (s *AwgInboundService) PollTrafficStats() AwgTrafficPollResult {
 	inboundSvc := InboundService{}
 	onlineSeen := map[string]struct{}{}
 	activeTags := map[string]struct{}{}
+	pendingWrites := make([]awgClientTrafficWrite, 0)
 	awgTrafficMu.Lock()
 	defer awgTrafficMu.Unlock()
 	for i := range inbounds {
@@ -416,57 +425,52 @@ func (s *AwgInboundService) PollTrafficStats() AwgTrafficPollResult {
 		}
 		tag := strings.TrimSpace(ib.Tag)
 		var inboundUp, inboundDown int64
-		_ = db.Transaction(func(tx *gorm.DB) error {
-			for _, peer := range peers {
-				email := emailByKey[peer.PublicKey]
-				if email == "" {
-					continue
-				}
-				upTotal := int64(peer.TransferTx)
-				downTotal := int64(peer.TransferRx)
-				updates := map[string]any{
-					"up":   upTotal,
-					"down": downTotal,
-				}
-				if peer.LatestHandshake > 0 {
-					updates["last_online"] = peer.LatestHandshake * 1000
-				}
-				tx.Model(&xray.ClientTraffic{}).Where("email = ?", email).Updates(updates)
-				if peer.Online {
-					onlineSeen[email] = struct{}{}
-					if tag != "" {
-						activeTags[tag] = struct{}{}
-						result.ClientSessionTags[email] = tag
-					}
-				}
-				if !peer.Online {
-					awgLastPeerTotals[email] = awgPeerTotals{up: upTotal, down: downTotal}
-					continue
-				}
-				last, seen := awgLastPeerTotals[email]
-				awgLastPeerTotals[email] = awgPeerTotals{up: upTotal, down: downTotal}
-				if !seen || upTotal < last.up || downTotal < last.down {
-					continue
-				}
-				deltaUp := upTotal - last.up
-				deltaDown := downTotal - last.down
-				if deltaUp == 0 && deltaDown == 0 {
-					continue
-				}
-				inboundUp += deltaUp
-				inboundDown += deltaDown
+		for _, peer := range peers {
+			email := emailByKey[peer.PublicKey]
+			if email == "" {
+				continue
+			}
+			upTotal := int64(peer.TransferTx)
+			downTotal := int64(peer.TransferRx)
+			write := awgClientTrafficWrite{email: email, up: upTotal, down: downTotal}
+			if peer.LatestHandshake > 0 {
+				write.lastOnline = peer.LatestHandshake * 1000
+				write.hasLast = true
+			}
+			pendingWrites = append(pendingWrites, write)
+			if peer.Online {
+				onlineSeen[email] = struct{}{}
 				if tag != "" {
 					activeTags[tag] = struct{}{}
 					result.ClientSessionTags[email] = tag
 				}
-				result.ClientDeltas = append(result.ClientDeltas, &xray.ClientTraffic{
-					Email: email,
-					Up:    deltaUp,
-					Down:  deltaDown,
-				})
 			}
-			return nil
-		})
+			if !peer.Online {
+				awgLastPeerTotals[email] = awgPeerTotals{up: upTotal, down: downTotal}
+				continue
+			}
+			last, seen := awgLastPeerTotals[email]
+			awgLastPeerTotals[email] = awgPeerTotals{up: upTotal, down: downTotal}
+			if !seen || upTotal < last.up || downTotal < last.down {
+				continue
+			}
+			deltaUp := upTotal - last.up
+			deltaDown := downTotal - last.down
+			if deltaUp == 0 && deltaDown == 0 {
+				continue
+			}
+			inboundUp += deltaUp
+			inboundDown += deltaDown
+			if tag != "" {
+				activeTags[tag] = struct{}{}
+				result.ClientSessionTags[email] = tag
+			}
+			result.ClientDeltas = append(result.ClientDeltas, &xray.ClientTraffic{
+				Email: email,
+				Up:    deltaUp,
+				Down:  deltaDown,
+			})
+		}
 		if tag != "" && (inboundUp > 0 || inboundDown > 0) {
 			result.InboundTraffics = append(result.InboundTraffics, &xray.Traffic{
 				IsInbound: true,
@@ -474,6 +478,31 @@ func (s *AwgInboundService) PollTrafficStats() AwgTrafficPollResult {
 				Up:        inboundUp,
 				Down:      inboundDown,
 			})
+		}
+	}
+	if len(pendingWrites) > 0 {
+		writes := pendingWrites
+		if err := submitTrafficWrite(func() error {
+			sort.Slice(writes, func(i, j int) bool {
+				return writes[i].email < writes[j].email
+			})
+			return db.Transaction(func(tx *gorm.DB) error {
+				for _, w := range writes {
+					updates := map[string]any{
+						"up":   w.up,
+						"down": w.down,
+					}
+					if w.hasLast {
+						updates["last_online"] = w.lastOnline
+					}
+					if err := tx.Model(&xray.ClientTraffic{}).Where("email = ?", w.email).Updates(updates).Error; err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+		}); err != nil {
+			logger.Warning("awg traffic write failed:", err)
 		}
 	}
 	result.OnlineEmails = make([]string, 0, len(onlineSeen))
