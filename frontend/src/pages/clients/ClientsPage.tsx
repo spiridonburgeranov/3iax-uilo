@@ -878,7 +878,6 @@ export default function ClientsPage() {
       render: (_v, record) => {
         const ids = record.inboundIds || [];
         if (ids.length === 0) return <span style={{ color: 'rgba(0,0,0,0.45)' }}>—</span>;
-        const sessionSet = new Set(getSessionInboundIds(record.email, ids));
         const visible = ids.slice(0, INBOUND_CHIP_LIMIT);
         const overflow = ids.slice(INBOUND_CHIP_LIMIT);
         const chip = (id: number, compact: boolean) => {
@@ -886,17 +885,9 @@ export default function ClientsPage() {
           const proto = (ib?.protocol || '').toLowerCase();
           const color = INBOUND_PROTOCOL_COLORS[proto] ?? 'default';
           const compactLabel = formatInboundLabel(ib?.tag, ib?.remark);
-          const active = sessionSet.has(id);
           return (
-            <Tooltip key={id} title={active ? `${inboundLabel(id)} · ${protocolLabel(ib?.protocol)}` : inboundLabel(id)}>
-              <Tag
-                color={color}
-                style={{
-                  margin: 2,
-                  outline: active ? '2px solid var(--ant-color-success)' : undefined,
-                  fontWeight: active ? 600 : undefined,
-                }}
-              >
+            <Tooltip key={id} title={inboundLabel(id)}>
+              <Tag color={color} style={{ margin: 2 }}>
                 {compact ? compactLabel : inboundLabel(id)}
               </Tag>
             </Tooltip>

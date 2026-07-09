@@ -91,19 +91,19 @@ func (j *XrayTrafficJob) Run() {
 	// client moves no bytes between polls (the delta heuristic's blind spot),
 	// while a short-lived connection can close before this poll yet still show
 	// in the delta. Older cores fall back to deltas alone.
+	idleOnlineEmails := make([]string, 0)
 	if onlineUsers, apiMode, ouErr := j.xrayService.GetOnlineUsers(); ouErr != nil {
 		logger.Debug("get online users from xray api failed:", ouErr)
 	} else if apiMode {
-		idleOnline := make([]string, 0, len(onlineUsers))
 		for _, u := range onlineUsers {
 			if !deltaActive[u.Email] {
 				activeEmails = append(activeEmails, u.Email)
-				idleOnline = append(idleOnline, u.Email)
+				idleOnlineEmails = append(idleOnlineEmails, u.Email)
 			}
 		}
 		// The traffic path only bumps last_online on a non-zero delta; keep the
 		// column fresh for clients kept online purely by a live connection.
-		if err := j.inboundService.BumpClientsLastOnline(idleOnline); err != nil {
+		if err := j.inboundService.BumpClientsLastOnline(idleOnlineEmails); err != nil {
 			logger.Warning("bump last online for connected clients failed:", err)
 		}
 	}
@@ -118,7 +118,8 @@ func (j *XrayTrafficJob) Run() {
 			activeInboundTags = append(activeInboundTags, tr.Tag)
 		}
 	}
-	j.inboundService.RefreshLocalOnlineClients(activeEmails, activeInboundTags)
+	sessionTags := j.inboundService.PollSessionTags(traffics, clientTraffics, idleOnlineEmails)
+	j.inboundService.RefreshLocalOnlineClients(activeEmails, activeInboundTags, sessionTags)
 
 	if !websocket.HasClients() {
 		return
@@ -168,12 +169,13 @@ func (j *XrayTrafficJob) Run() {
 		onlineClients = []string{}
 	}
 	websocket.BroadcastTraffic(map[string]any{
-		"traffics":       traffics,
-		"clientTraffics": clientTraffics,
-		"onlineClients":  onlineClients,
-		"onlineByGuid":   j.inboundService.GetOnlineClientsByGuid(),
-		"activeInbounds": j.inboundService.GetActiveInboundsByGuid(),
-		"lastOnlineMap":  lastOnlineMap,
+		"traffics":           traffics,
+		"clientTraffics":     clientTraffics,
+		"onlineClients":      onlineClients,
+		"onlineByGuid":       j.inboundService.GetOnlineClientsByGuid(),
+		"activeInbounds":     j.inboundService.GetActiveInboundsByGuid(),
+		"clientSessionTags":  j.inboundService.GetClientSessionTagsByGuid(),
+		"lastOnlineMap":      lastOnlineMap,
 	})
 
 	clientStatsPayload := map[string]any{"snapshot": snapshot}

@@ -35,6 +35,7 @@ type AwgTrafficPollResult struct {
 	InboundTraffics   []*xray.Traffic
 	OnlineEmails      []string
 	ActiveInboundTags []string
+	ClientSessionTags map[string]string
 }
 
 type AwgDiscoveredInterface struct {
@@ -377,7 +378,7 @@ func (s *AwgInboundService) UpdateTrafficStats() {
 }
 
 func (s *AwgInboundService) PollTrafficStats() AwgTrafficPollResult {
-	result := AwgTrafficPollResult{}
+	result := AwgTrafficPollResult{ClientSessionTags: map[string]string{}}
 	if !awg.IsInstalled() {
 		return result
 	}
@@ -435,6 +436,7 @@ func (s *AwgInboundService) PollTrafficStats() AwgTrafficPollResult {
 					onlineSeen[email] = struct{}{}
 					if tag != "" {
 						activeTags[tag] = struct{}{}
+						result.ClientSessionTags[email] = tag
 					}
 				}
 				if !peer.Online {
@@ -455,6 +457,7 @@ func (s *AwgInboundService) PollTrafficStats() AwgTrafficPollResult {
 				inboundDown += deltaDown
 				if tag != "" {
 					activeTags[tag] = struct{}{}
+					result.ClientSessionTags[email] = tag
 				}
 				result.ClientDeltas = append(result.ClientDeltas, &xray.ClientTraffic{
 					Email: email,
@@ -483,6 +486,9 @@ func (s *AwgInboundService) PollTrafficStats() AwgTrafficPollResult {
 		result.ActiveInboundTags = append(result.ActiveInboundTags, tag)
 	}
 	sort.Strings(result.ActiveInboundTags)
+	if len(result.ClientSessionTags) == 0 {
+		result.ClientSessionTags = nil
+	}
 	return result
 }
 

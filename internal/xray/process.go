@@ -164,6 +164,13 @@ type process struct {
 	// two signals stay aligned — an email within grace always has the
 	// inbound it used within grace too.
 	localInboundLastActive map[string]int64
+	// localClientSessionTag records, per email, the inbound tag this panel
+	// last attributed the client's live session to. Multi-inbound clients
+	// need this because user>>>email traffic is global while inbound>>>tag
+	// is per listener — pairing both still leaves ambiguity when several
+	// inbounds share the same email.
+	localClientSessionTag map[string]string
+	localClientSessionAt  map[string]int64
 	// nodeOnlineTrees holds, per direct remote node (keyed by that node's
 	// panel-local id), the GUID-keyed online-emails subtree that node
 	// reported — its own clients under its panelGuid plus every descendant
@@ -403,13 +410,30 @@ func (p *Process) GetLocalActiveInbounds() []string {
 	return out
 }
 
+// GetLocalClientSessionTags returns a copy of email→inbound-tag session
+// attributions still within the online grace window on THIS panel.
+func (p *Process) GetLocalClientSessionTags() map[string]string {
+	p.onlineMu.RLock()
+	defer p.onlineMu.RUnlock()
+	if len(p.localClientSessionTag) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(p.localClientSessionTag))
+	for email, tag := range p.localClientSessionTag {
+		out[email] = tag
+	}
+	return out
+}
+
 // RefreshLocalOnline records that each email in activeEmails and each tag in
 // activeInboundTags had local xray traffic at now, then rebuilds onlineClients
 // and localActiveInbounds from every entry seen within graceMs, pruning older
 // ones. Called by the local XrayTrafficJob after each xray gRPC stats poll.
 // Pass nil/empty slices to only prune — NodeTrafficSyncJob does this so a
 // stopped local xray's clients and inbounds still age out between local polls.
-func (p *Process) RefreshLocalOnline(activeEmails, activeInboundTags []string, now, graceMs int64) {
+// clientSessionTags carries per-email inbound-tag attributions for this poll;
+// pass nil to leave existing attributions untouched (still pruned with online).
+func (p *Process) RefreshLocalOnline(activeEmails, activeInboundTags []string, clientSessionTags map[string]string, now, graceMs int64) {
 	p.onlineMu.Lock()
 	defer p.onlineMu.Unlock()
 	if p.localLastOnline == nil {
@@ -427,6 +451,30 @@ func (p *Process) RefreshLocalOnline(activeEmails, activeInboundTags []string, n
 		}
 	}
 	p.onlineClients = online
+	onlineSet := make(map[string]struct{}, len(online))
+	for _, email := range online {
+		onlineSet[email] = struct{}{}
+	}
+
+	if p.localClientSessionTag == nil {
+		p.localClientSessionTag = make(map[string]string, len(clientSessionTags))
+	}
+	if p.localClientSessionAt == nil {
+		p.localClientSessionAt = make(map[string]int64, len(clientSessionTags))
+	}
+	for email, tag := range clientSessionTags {
+		if email == "" || tag == "" {
+			continue
+		}
+		p.localClientSessionTag[email] = tag
+		p.localClientSessionAt[email] = now
+	}
+	for email := range p.localClientSessionTag {
+		if _, ok := onlineSet[email]; !ok {
+			delete(p.localClientSessionTag, email)
+			delete(p.localClientSessionAt, email)
+		}
+	}
 
 	if p.localInboundLastActive == nil {
 		p.localInboundLastActive = make(map[string]int64, len(activeInboundTags))

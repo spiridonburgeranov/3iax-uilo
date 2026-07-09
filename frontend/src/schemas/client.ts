@@ -177,6 +177,11 @@ export const ActiveInboundsByNodeSchema = z
   .nullable()
   .transform((v) => v ?? {});
 
+export const ClientSessionByNodeSchema = z
+  .record(z.string(), z.record(z.string(), z.string()))
+  .nullable()
+  .transform((v) => v ?? {});
+
 export const GroupSummarySchema = z.object({
   name: z.string(),
   clientCount: z.number(),

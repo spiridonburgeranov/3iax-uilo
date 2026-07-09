@@ -1173,9 +1173,9 @@ func (s *InboundService) GetClientsLastOnline() (map[string]int64, error) {
 // grace window and pruning stale entries. Pass nil to only prune. See
 // xray.Process for why the local sets are kept separate from the shared
 // last_online column.
-func (s *InboundService) RefreshLocalOnlineClients(activeEmails, activeInboundTags []string) {
+func (s *InboundService) RefreshLocalOnlineClients(activeEmails, activeInboundTags []string, clientSessionTags map[string]string) {
 	if p != nil {
-		p.RefreshLocalOnline(activeEmails, activeInboundTags, time.Now().UnixMilli(), onlineGracePeriodMs)
+		p.RefreshLocalOnline(activeEmails, activeInboundTags, clientSessionTags, time.Now().UnixMilli(), onlineGracePeriodMs)
 	}
 }
 

@@ -857,6 +857,12 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
+        path: '/panel/api/clients/sessionInbounds',
+        summary: 'Per-client inbound-tag session attribution grouped by hosting panelGuid. Resolves which inbound a multi-inbound online client is actually using this poll window.',
+        response: '{\n  "success": true,\n  "obj": {\n    "a1b2-...": {\n      "user1": "in-awg-tcp"\n    }\n  }\n}',
+      },
+      {
+        method: 'POST',
         path: '/panel/api/clients/lastOnline',
         summary: 'Map of client email → last-seen unix timestamp.',
         response: '{\n  "success": true,\n  "obj": {\n    "user1": 1700000000,\n    "user2": 1699999000\n  }\n}',

@@ -152,7 +152,7 @@ func (j *NodeTrafficSyncJob) Run() {
 	// Prune stale local-online entries (no local active emails or inbound tags
 	// to add here — only the local xray poll feeds those) so a stopped local
 	// xray's clients and inbounds still age out between traffic polls.
-	j.inboundService.RefreshLocalOnlineClients(nil, nil)
+	j.inboundService.RefreshLocalOnlineClients(nil, nil, nil)
 
 	// Derive per-node-inbound speed every tick (keeps the baseline fresh even
 	// with no dashboard open); only broadcast it when someone is watching.
@@ -206,10 +206,11 @@ func (j *NodeTrafficSyncJob) Run() {
 		online = []string{}
 	}
 	trafficPayload := map[string]any{
-		"onlineClients":  online,
-		"onlineByGuid":   j.inboundService.GetOnlineClientsByGuid(),
-		"activeInbounds": j.inboundService.GetActiveInboundsByGuid(),
-		"lastOnlineMap":  lastOnline,
+		"onlineClients":     online,
+		"onlineByGuid":      j.inboundService.GetOnlineClientsByGuid(),
+		"activeInbounds":    j.inboundService.GetActiveInboundsByGuid(),
+		"clientSessionTags": j.inboundService.GetClientSessionTagsByGuid(),
+		"lastOnlineMap":     lastOnline,
 	}
 	// Always send the key so the dashboard clears node inbounds that went idle
 	// this tick. A nil result (query error) marshals to null and is skipped

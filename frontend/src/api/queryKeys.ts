@@ -30,6 +30,7 @@ export const keys = {
     onlines: () => ['clients', 'onlines'] as const,
     onlinesByGuid: () => ['clients', 'onlinesByGuid'] as const,
     activeInbounds: () => ['clients', 'activeInbounds'] as const,
+    sessionInbounds: () => ['clients', 'sessionInbounds'] as const,
     lastOnline: () => ['clients', 'lastOnline'] as const,
     groups: () => ['clients', 'groups'] as const,
   },

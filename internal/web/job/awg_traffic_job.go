@@ -22,7 +22,7 @@ func (j *AwgTrafficJob) Run() {
 			logger.Warning("awg traffic job: add inbound traffic failed:", err)
 		}
 	}
-	j.inboundService.RefreshLocalOnlineClients(poll.OnlineEmails, poll.ActiveInboundTags)
+	j.inboundService.RefreshLocalOnlineClients(poll.OnlineEmails, poll.ActiveInboundTags, poll.ClientSessionTags)
 	if !websocket.HasClients() {
 		return
 	}
@@ -31,9 +31,10 @@ func (j *AwgTrafficJob) Run() {
 		onlineClients = []string{}
 	}
 	payload := map[string]any{
-		"onlineClients":  onlineClients,
-		"onlineByGuid":   j.inboundService.GetOnlineClientsByGuid(),
-		"activeInbounds": j.inboundService.GetActiveInboundsByGuid(),
+		"onlineClients":     onlineClients,
+		"onlineByGuid":      j.inboundService.GetOnlineClientsByGuid(),
+		"activeInbounds":    j.inboundService.GetActiveInboundsByGuid(),
+		"clientSessionTags": j.inboundService.GetClientSessionTagsByGuid(),
 	}
 	if len(poll.InboundTraffics) > 0 {
 		payload["traffics"] = poll.InboundTraffics

@@ -7188,6 +7188,44 @@
         }
       }
     },
+    "/panel/api/clients/sessionInbounds": {
+      "post": {
+        "tags": [
+          "Clients"
+        ],
+        "summary": "Per-client inbound-tag session attribution grouped by hosting panelGuid. Resolves which inbound a multi-inbound online client is actually using this poll window.",
+        "operationId": "post_panel_api_clients_sessionInbounds",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "a1b2-...": {
+                      "user1": "in-awg-tcp"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/clients/lastOnline": {
       "post": {
         "tags": [
@@ -7373,6 +7411,132 @@
                   "obj": [
                     "vless://uuid@host:443?...#user1"
                   ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clients/inbound/{inboundId}/{email}/vpnuri": {
+      "get": {
+        "tags": [
+          "Clients"
+        ],
+        "summary": "Return a vpn:// import URI for the Amnezia VPN mobile/desktop app.",
+        "operationId": "get_panel_api_clients_inbound_inboundId_email_vpnuri",
+        "parameters": [
+          {
+            "name": "inboundId",
+            "in": "path",
+            "required": true,
+            "description": "Inbound ID attached to the client.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "email",
+            "in": "path",
+            "required": true,
+            "description": "Client email on that inbound.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endpoint",
+            "in": "query",
+            "required": true,
+            "description": "Public host:port override for the client endpoint.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": "vpn://..."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clients/inbound/{inboundId}/{email}/vpnfile": {
+      "get": {
+        "tags": [
+          "Clients"
+        ],
+        "summary": "Return the native Amnezia .vpn profile JSON for direct import/export.",
+        "operationId": "get_panel_api_clients_inbound_inboundId_email_vpnfile",
+        "parameters": [
+          {
+            "name": "inboundId",
+            "in": "path",
+            "required": true,
+            "description": "Inbound ID attached to the client.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "email",
+            "in": "path",
+            "required": true,
+            "description": "Client email on that inbound.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endpoint",
+            "in": "query",
+            "required": true,
+            "description": "Public host:port override for the client endpoint.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": "{\"containers\":[...],\"defaultContainer\":\"amnezia-xray\"}"
                 }
               }
             }
@@ -10815,6 +10979,65 @@
         ],
         "summary": "Return a vpn:// import URI for the Amnezia VPN mobile/desktop app.",
         "operationId": "get_panel_api_awg_client_inboundId_email_vpnuri",
+        "parameters": [
+          {
+            "name": "inboundId",
+            "in": "path",
+            "required": true,
+            "description": "AmneziaWG inbound ID.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "email",
+            "in": "path",
+            "required": true,
+            "description": "Client email.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endpoint",
+            "in": "query",
+            "required": true,
+            "description": "Optional endpoint host:port override.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/awg/client/{inboundId}/{email}/vpnfile": {
+      "get": {
+        "tags": [
+          "AWGv2"
+        ],
+        "summary": "Return the native Amnezia .vpn profile JSON for an AWG client.",
+        "operationId": "get_panel_api_awg_client_inboundId_email_vpnfile",
         "parameters": [
           {
             "name": "inboundId",

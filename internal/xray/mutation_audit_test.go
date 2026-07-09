@@ -208,9 +208,9 @@ func TestRefreshLocalOnline_GraceBoundaryEmails(t *testing.T) {
 	p := newOnlineTestProcess()
 	const grace = int64(20000)
 
-	p.RefreshLocalOnline([]string{"edge"}, nil, 0, grace)
+	p.RefreshLocalOnline([]string{"edge"}, nil, nil, 0, grace)
 	// now-ts == grace exactly: age is not strictly < grace, so it must drop.
-	p.RefreshLocalOnline(nil, nil, grace, grace)
+	p.RefreshLocalOnline(nil, nil, nil, grace, grace)
 	for _, e := range p.GetLocalOnlineClients() {
 		if e == "edge" {
 			t.Fatalf("email idle exactly graceMs must age out (half-open window), got online %v", p.GetLocalOnlineClients())
@@ -219,8 +219,8 @@ func TestRefreshLocalOnline_GraceBoundaryEmails(t *testing.T) {
 
 	// One millisecond inside the window must still be online.
 	p2 := newOnlineTestProcess()
-	p2.RefreshLocalOnline([]string{"edge"}, nil, 0, grace)
-	p2.RefreshLocalOnline(nil, nil, grace-1, grace)
+	p2.RefreshLocalOnline([]string{"edge"}, nil, nil, 0, grace)
+	p2.RefreshLocalOnline(nil, nil, nil, grace-1, grace)
 	if !containsString(p2.GetLocalOnlineClients(), "edge") {
 		t.Fatalf("email idle graceMs-1 must still be online, got %v", p2.GetLocalOnlineClients())
 	}
@@ -232,8 +232,8 @@ func TestRefreshLocalOnline_GraceBoundaryInbounds(t *testing.T) {
 	p := newOnlineTestProcess()
 	const grace = int64(20000)
 
-	p.RefreshLocalOnline(nil, []string{"in-edge"}, 0, grace)
-	p.RefreshLocalOnline(nil, nil, grace, grace)
+	p.RefreshLocalOnline(nil, []string{"in-edge"}, nil, 0, grace)
+	p.RefreshLocalOnline(nil, nil, nil, grace, grace)
 	for _, tag := range p.GetLocalActiveInbounds() {
 		if tag == "in-edge" {
 			t.Fatalf("inbound idle exactly graceMs must age out, got active %v", p.GetLocalActiveInbounds())
@@ -241,8 +241,8 @@ func TestRefreshLocalOnline_GraceBoundaryInbounds(t *testing.T) {
 	}
 
 	p2 := newOnlineTestProcess()
-	p2.RefreshLocalOnline(nil, []string{"in-edge"}, 0, grace)
-	p2.RefreshLocalOnline(nil, nil, grace-1, grace)
+	p2.RefreshLocalOnline(nil, []string{"in-edge"}, nil, 0, grace)
+	p2.RefreshLocalOnline(nil, nil, nil, grace-1, grace)
 	if !containsString(p2.GetLocalActiveInbounds(), "in-edge") {
 		t.Fatalf("inbound idle graceMs-1 must still be active, got %v", p2.GetLocalActiveInbounds())
 	}

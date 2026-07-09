@@ -77,5 +77,14 @@ func (j *MtprotoJob) Run() {
 		}
 	}
 
-	j.inboundService.RefreshLocalOnlineClients(onlineEmails, activeTags)
+	sessionTags := make(map[string]string, len(deltas))
+	for _, d := range deltas {
+		if d.Email != "" && d.Tag != "" {
+			sessionTags[d.Email] = d.Tag
+		}
+	}
+	if len(sessionTags) == 0 {
+		sessionTags = nil
+	}
+	j.inboundService.RefreshLocalOnlineClients(onlineEmails, activeTags, sessionTags)
 }
