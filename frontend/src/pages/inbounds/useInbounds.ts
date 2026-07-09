@@ -108,6 +108,48 @@ function toGuidOnlineMap(data: Record<string, string[]>): Map<string, Set<string
   return map;
 }
 
+function buildOnlineInboundAssignments(
+  rows: DBInboundInstance[],
+  onlineByGuid: Map<string, Set<string>>,
+  activeByGuid: Map<string, Set<string>>,
+): Map<number, Set<string>> {
+  const byEmail = new Map<string, number[]>();
+  for (const row of rows) {
+    const protocol = row.protocol;
+    if (!TRACKED_PROTOCOLS.includes(protocol)) continue;
+    const settings = coerceInboundJsonField(row.settings) as {
+      method?: string;
+      clients?: Array<{ email?: string; enable?: boolean }>;
+    };
+    if (protocol === Protocols.SHADOWSOCKS && !isSSMultiUser({ protocol, settings })) continue;
+    const clients = settings.clients || [];
+    if (clients.length === 0) continue;
+    const guid = row.originNodeGuid || (row.nodeId != null ? `node:${row.nodeId}` : '');
+    const nodeOnline = onlineByGuid.get(guid);
+    if (!nodeOnline || nodeOnline.size === 0) continue;
+    const activeForNode = activeByGuid.get(guid);
+    const inboundActive = activeForNode === undefined || !row.tag || activeForNode.has(row.tag);
+    if (!inboundActive) continue;
+    for (const client of clients) {
+      const email = client?.email;
+      if (!email || !client.enable || !nodeOnline.has(email)) continue;
+      const hits = byEmail.get(email) || [];
+      hits.push(row.id);
+      byEmail.set(email, hits);
+    }
+  }
+
+  const out = new Map<number, Set<string>>();
+  for (const [email, inboundIds] of byEmail.entries()) {
+    if (inboundIds.length === 0) continue;
+    const selected = inboundIds.length === 1 ? inboundIds[0] : Math.min(...inboundIds);
+    if (selected == null) continue;
+    if (!out.has(selected)) out.set(selected, new Set<string>());
+    out.get(selected)?.add(email);
+  }
+  return out;
+}
+
 async function fetchLastOnlineMap(): Promise<Record<string, number>> {
   const msg = await HttpUtil.post('/panel/api/clients/lastOnline', undefined, { silent: true });
   if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch lastOnline');
@@ -219,6 +261,7 @@ export function useInbounds() {
   // the email signal. A present GUID gates: a client only counts online on an
   // inbound whose tag carried traffic this window.
   const activeByGuidRef = useRef<Map<string, Set<string>>>(new Map());
+  const onlineByInboundRef = useRef<Map<number, Set<string>>>(new Map());
 
   const [lastOnlineMap, setLastOnlineMap] = useState<Record<string, number>>({});
 
@@ -244,6 +287,7 @@ export function useInbounds() {
       const nodeOnline = onlineByGuidRef.current.get(guid);
       const activeForNode = activeByGuidRef.current.get(guid);
       const inboundActive = activeForNode === undefined || !dbInbound.tag || activeForNode.has(dbInbound.tag);
+      const inboundOnline = onlineByInboundRef.current.get(dbInbound.id);
 
       if (dbInbound.enable) {
         const statsByEmail = new Map<string, { email: string; total: number; up: number; down: number; expiryTime: number }>();
@@ -269,7 +313,7 @@ export function useInbounds() {
             continue;
           }
           active.push(client.email);
-          if (inboundActive && nodeOnline?.has(client.email)) online.push(client.email);
+          if (inboundActive && nodeOnline?.has(client.email) && inboundOnline?.has(client.email)) online.push(client.email);
           if (stats) {
             const expiringSoon =
               (stats.expiryTime > 0 && stats.expiryTime - now < expireDiffRef.current) ||
@@ -297,6 +341,11 @@ export function useInbounds() {
   );
 
   const rebuildClientCount = useCallback(() => {
+    onlineByInboundRef.current = buildOnlineInboundAssignments(
+      dbInboundsRef.current,
+      onlineByGuidRef.current,
+      activeByGuidRef.current,
+    );
     const counts: Record<number, ClientRollup> = {};
     for (const dbInbound of dbInboundsRef.current) {
       const protocol = dbInbound.protocol;
@@ -330,6 +379,11 @@ export function useInbounds() {
       }
     }
     dbInboundsRef.current = next;
+    onlineByInboundRef.current = buildOnlineInboundAssignments(
+      next,
+      onlineByGuidRef.current,
+      activeByGuidRef.current,
+    );
     setDbInbounds(next);
     setClientCount(counts);
   }, [slimQuery.data, rollupClients]);
