@@ -1,0 +1,22 @@
+.index-page .awg-card {
+  height: 100%;
+}
+
+.index-page .awg-stat-card .ant-card-body {
+  padding: 14px 16px;
+}
+
+.index-page .awg-stat-label {
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.index-page .awg-stat-value {
+  margin-top: 4px;
+  color: var(--ant-color-text);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  word-break: break-word;
+}

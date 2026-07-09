@@ -8,6 +8,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useStatusQuery } from '@/api/queries/useStatusQuery';
 import { HttpUtil, SizeFormatter } from '@/utils';
 import '@/pages/index/IndexPage.css';
+import '@/pages/awg/awg.css';
 
 interface AwgDiscovered {
   name: string;
@@ -152,6 +153,7 @@ export default function AwgPage() {
               <Row gutter={[16, 16]}>
                 <Col span={24}>
                   <Card
+                    className="awg-card"
                     title="AmneziaWG"
                     extra={(
                       <Space wrap>
@@ -200,9 +202,41 @@ export default function AwgPage() {
                   </Card>
                 </Col>
 
-                <Col span={24}>
-                  <Card title="Managed inbounds">
+                <Col xs={24} sm={12} xl={6}>
+                  <Card className="awg-card awg-stat-card" size="small">
+                    <div className="awg-stat-label">Managed inbounds</div>
+                    <div className="awg-stat-value">{inbounds.length}</div>
+                  </Card>
+                </Col>
+                <Col xs={24} sm={12} xl={6}>
+                  <Card className="awg-card awg-stat-card" size="small">
+                    <div className="awg-stat-label">Running inbounds</div>
+                    <div className="awg-stat-value">{inbounds.filter((row) => row.running).length}</div>
+                  </Card>
+                </Col>
+                <Col xs={24} sm={12} xl={6}>
+                  <Card className="awg-card awg-stat-card" size="small">
+                    <div className="awg-stat-label">Online peers</div>
+                    <div className="awg-stat-value">{inbounds.reduce((acc, row) => acc + row.onlineCount, 0)}</div>
+                  </Card>
+                </Col>
+                <Col xs={24} sm={12} xl={6}>
+                  <Card className="awg-card awg-stat-card" size="small">
+                    <div className="awg-stat-label">Total traffic</div>
+                    <div className="awg-stat-value">
+                      {SizeFormatter.sizeFormat(
+                        inbounds.reduce((acc, row) => (
+                          acc + row.peers.reduce((sum, peer) => sum + (peer.transferRx || 0) + (peer.transferTx || 0), 0)
+                        ), 0),
+                      )}
+                    </div>
+                  </Card>
+                </Col>
+
+                <Col xs={24} xl={12}>
+                  <Card className="awg-card" title="Managed inbounds">
                     <Table
+                      size="middle"
                       rowKey="inboundId"
                       dataSource={inbounds}
                       pagination={false}
@@ -232,35 +266,14 @@ export default function AwgPage() {
                           ),
                         },
                       ]}
-                      expandable={{
-                        expandedRowRender: (row) => (
-                          <Table
-                            size="small"
-                            rowKey={(peer) => peer.publicKey}
-                            pagination={false}
-                            dataSource={row.peers}
-                            columns={[
-                              { title: 'Client', render: (_, peer) => peer.email || peer.publicKey },
-                              { title: 'Endpoint', dataIndex: 'endpoint' },
-                              {
-                                title: 'Traffic',
-                                render: (_, peer) => `↑ ${SizeFormatter.sizeFormat(peer.transferTx || 0)} / ↓ ${SizeFormatter.sizeFormat(peer.transferRx || 0)}`,
-                              },
-                              {
-                                title: 'Status',
-                                render: (_, peer) => <Tag color={peer.online ? 'green' : 'default'}>{peer.online ? 'online' : 'idle'}</Tag>,
-                              },
-                            ]}
-                          />
-                        ),
-                      }}
                     />
                   </Card>
                 </Col>
 
-                <Col span={24}>
-                  <Card title="Discovered interfaces">
+                <Col xs={24} xl={12}>
+                  <Card className="awg-card" title="Discovered interfaces">
                     <Table
+                      size="middle"
                       rowKey="name"
                       dataSource={discovered}
                       pagination={false}
