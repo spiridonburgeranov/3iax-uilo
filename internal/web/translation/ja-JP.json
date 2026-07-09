@@ -40,6 +40,7 @@
   "unlimited": "無制限",
   "none": "なし",
   "qrCode": "QRコード",
+  "qrCodeTooLong": "リンクが長すぎてQRコードを生成できません。コピーをご利用ください。",
   "info": "詳細情報",
   "edit": "編集",
   "delete": "削除",

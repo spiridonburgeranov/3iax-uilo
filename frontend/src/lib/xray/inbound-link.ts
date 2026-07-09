@@ -1407,3 +1407,14 @@ export function isPostQuantumLink(link: string): boolean {
   if (link.includes('ML-KEM-768')) return true;
   return false;
 }
+
+const QR_CODE_MAX_UTF8_BYTES = 2200;
+
+export function canEncodeQrCode(value: string): boolean {
+  if (!value) return false;
+  return new TextEncoder().encode(value).length <= QR_CODE_MAX_UTF8_BYTES;
+}
+
+export function canShowQrCode(link: string): boolean {
+  return !isPostQuantumLink(link) && canEncodeQrCode(link);
+}

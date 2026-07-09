@@ -2,6 +2,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  canEncodeQrCode,
+  canShowQrCode,
   genHysteriaLink,
   genInboundLinks,
   genShadowsocksLink,
@@ -11,6 +13,7 @@ import {
   genVmessLink,
   genWireguardConfig,
   genWireguardLink,
+  isPostQuantumLink,
   preferPublicHost,
   resolveAddr,
 } from '@/lib/xray/inbound-link';
@@ -706,5 +709,28 @@ describe('genVlessLink flow gating (#5322)', () => {
       flow: 'xtls-rprx-vision',
     });
     expect(new URL(link).searchParams.get('flow')).toBe('xtls-rprx-vision');
+  });
+});
+
+describe('canEncodeQrCode', () => {
+  it('accepts typical share links', () => {
+    expect(canEncodeQrCode('trojan://pw@example.test:443?type=ws&security=tls#remark')).toBe(true);
+  });
+
+  it('rejects payloads beyond QR byte capacity', () => {
+    expect(canEncodeQrCode('a'.repeat(2300))).toBe(false);
+  });
+});
+
+describe('canShowQrCode', () => {
+  it('rejects post-quantum links even when short', () => {
+    const link = 'vless://id@host:443?security=reality&pqv=short#x';
+    expect(isPostQuantumLink(link)).toBe(true);
+    expect(canShowQrCode(link)).toBe(false);
+  });
+
+  it('rejects long non-PQ links', () => {
+    const link = `trojan://pw@host:443?extra=${'x'.repeat(2400)}#remark`;
+    expect(canShowQrCode(link)).toBe(false);
   });
 });

@@ -40,6 +40,7 @@
   "unlimited": "无限制",
   "none": "无",
   "qrCode": "二维码",
+  "qrCodeTooLong": "链接过长，无法生成二维码。请使用复制功能。",
   "info": "更多信息",
   "edit": "编辑",
   "delete": "删除",

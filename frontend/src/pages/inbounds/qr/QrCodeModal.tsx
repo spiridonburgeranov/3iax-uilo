@@ -8,7 +8,7 @@ import {
   genAllLinks,
   genWireguardConfigs,
   genWireguardLinks,
-  isPostQuantumLink,
+  canShowQrCode,
   preferPublicHost,
 } from '@/lib/xray/inbound-link';
 import { inboundFromDb, type DbInboundLike } from '@/lib/xray/inbound-from-db';
@@ -136,7 +136,7 @@ export default function QrCodeModal({
           value={item.value}
           remark={item.header}
           downloadName={item.downloadName || ''}
-          showQr={item.showQr !== false && !isPostQuantumLink(item.value)}
+          showQr={item.showQr !== false && canShowQrCode(item.value)}
         />
       ),
     })),

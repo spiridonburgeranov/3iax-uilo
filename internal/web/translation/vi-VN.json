@@ -40,6 +40,7 @@
   "unlimited": "Không giới hạn",
   "none": "Không",
   "qrCode": "Mã QR",
+  "qrCodeTooLong": "Liên kết quá dài để tạo mã QR. Hãy dùng chức năng sao chép.",
   "info": "Thông tin thêm",
   "edit": "Sửa",
   "delete": "Xóa",

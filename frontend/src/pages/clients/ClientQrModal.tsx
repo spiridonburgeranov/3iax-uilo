@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Collapse, Modal, Spin, Tag } from 'antd';
 import { HttpUtil } from '@/utils';
-import { isPostQuantumLink } from '@/lib/xray/inbound-link';
+import { canShowQrCode } from '@/lib/xray/inbound-link';
 import { LinkTags, linkMetaText, parseLinkParts } from '@/lib/xray/link-label';
 import { QrPanel } from '@/pages/inbounds/qr';
 import AmneziaSharePanel from '@/components/clients/AmneziaSharePanel';
@@ -127,7 +127,7 @@ export default function ClientQrModal({
           <QrPanel
             value={link}
             remark={parts?.remark || `${client?.email || ''} #${idx + 1}`}
-            showQr={!isPostQuantumLink(link)}
+            showQr={canShowQrCode(link)}
           />
         ),
       });

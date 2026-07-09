@@ -40,6 +40,7 @@
   "unlimited": "無限制",
   "none": "無",
   "qrCode": "二維碼",
+  "qrCodeTooLong": "連結過長，無法生成二維碼。請使用複製功能。",
   "info": "更多資訊",
   "edit": "編輯",
   "delete": "刪除",

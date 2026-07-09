@@ -38,3 +38,12 @@
   height: auto;
   max-width: 360px;
 }
+
+.qr-panel-too-long {
+  margin: 0;
+  padding: 4px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ant-color-text-secondary);
+  text-align: center;
+}

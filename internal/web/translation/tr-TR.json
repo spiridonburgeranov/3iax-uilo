@@ -40,6 +40,7 @@
   "unlimited": "Sınırsız",
   "none": "Yok",
   "qrCode": "QR Kod",
+  "qrCodeTooLong": "Bağlantı QR kodu için çok uzun. Kopyalama özelliğini kullanın.",
   "info": "Daha Fazla Bilgi",
   "edit": "Düzenle",
   "delete": "Sil",

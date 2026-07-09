@@ -32,7 +32,7 @@ import {
 } from '@ant-design/icons';
 
 import { ClipboardManager, IntlUtil, LanguageManager } from '@/utils';
-import { isPostQuantumLink, wireguardConfigFromLink } from '@/lib/xray/inbound-link';
+import { canShowQrCode, wireguardConfigFromLink } from '@/lib/xray/inbound-link';
 import { LinkTags, parseLinkParts } from '@/lib/xray/link-label';
 import ConfigBlock from '@/components/clients/ConfigBlock';
 import { setMessageInstance } from '@/utils/messageBus';
@@ -428,7 +428,7 @@ export default function SubPage() {
                         const fallback = `Link ${idx + 1}`;
                         const rowTitle = parts?.remark || fallback;
                         const qrLabel = parts?.remark || rowTitle;
-                        const canQr = !isPostQuantumLink(link);
+                        const canQr = canShowQrCode(link);
                         const isWireguardLink = link.startsWith('wireguard://') || link.startsWith('wg://');
                         return (
                           <Fragment key={link}>

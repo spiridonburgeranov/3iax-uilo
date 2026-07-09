@@ -40,6 +40,7 @@
   "unlimited": "Tanpa Batas",
   "none": "Tidak ada",
   "qrCode": "Kode QR",
+  "qrCodeTooLong": "Tautan terlalu panjang untuk kode QR. Gunakan salin.",
   "info": "Informasi Lebih Lanjut",
   "edit": "Edit",
   "delete": "Hapus",

@@ -8,7 +8,7 @@ import { formatInboundLabel } from '@/lib/inbounds/label';
 import { normalizeClientIps, type ClientIpInfo } from '@/lib/clients/ip-log';
 import { useDatepicker } from '@/hooks/useDatepicker';
 import type { ClientRecord, InboundOption } from '@/hooks/useClients';
-import { isPostQuantumLink } from '@/lib/xray/inbound-link';
+import { canShowQrCode } from '@/lib/xray/inbound-link';
 import { LinkTags, linkMetaText, parseLinkParts } from '@/lib/xray/link-label';
 import { QrPanel } from '@/pages/inbounds/qr';
 import AmneziaSharePanel from '@/components/clients/AmneziaSharePanel';
@@ -476,7 +476,7 @@ export default function ClientInfoModal({
                   const fallback = `${t('pages.clients.link')} ${idx + 1}`;
                   const rowTitle = (parts && linkMetaText(parts)) || fallback;
                   const qrRemark = parts?.remark || rowTitle;
-                  const canQr = !isPostQuantumLink(link);
+                  const canQr = canShowQrCode(link);
                   return (
                     <div key={idx} className="link-row">
                       {parts

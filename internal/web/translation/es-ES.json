@@ -40,6 +40,7 @@
   "unlimited": "Ilimitado",
   "none": "Ninguno",
   "qrCode": "Código QR",
+  "qrCodeTooLong": "El enlace es demasiado largo para un código QR. Usa copiar.",
   "info": "Más Información",
   "edit": "Editar",
   "delete": "Eliminar",

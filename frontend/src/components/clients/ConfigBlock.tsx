@@ -4,6 +4,7 @@ import { Button, Collapse, Popover, Tag, Tooltip, message } from 'antd';
 import { CopyOutlined, DownloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 
 import { ClipboardManager, FileManager } from '@/utils';
+import { canShowQrCode } from '@/lib/xray/inbound-link';
 import { QrPanel } from '@/pages/inbounds/qr';
 import './ConfigBlock.css';
 
@@ -48,7 +49,7 @@ export default function ConfigBlock({
           onClick={() => FileManager.downloadTextFile(text, fileName)}
         />
       </Tooltip>
-      {showQr && (
+      {showQr && canShowQrCode(text) && (
         <Popover
           trigger="click"
           placement="left"
