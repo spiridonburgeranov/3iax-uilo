@@ -130,6 +130,7 @@ func (s *ClientService) delInboundClients(inboundSvc *InboundService, inboundId 
 
 	db := database.GetDB()
 	newClients = compactOrphans(db, newClients)
+	newClients = pruneKeylessSettingsClients(newClients)
 	if newClients == nil {
 		newClients = []any{}
 	}
@@ -1019,6 +1020,7 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 		removeTunnelPeerEntries(settings, email, "")
 	}
 	newClients = compactOrphans(db, newClients)
+	newClients = pruneKeylessSettingsClients(newClients)
 	if newClients == nil {
 		newClients = []any{}
 	}
@@ -1106,7 +1108,8 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 				return true, rerr
 			}
 			if err := (&AwgInboundService{}).Apply(refreshed); err != nil {
-				return true, err
+				logger.Warning("awg apply after client delete failed:", err)
+				return false, nil
 			}
 			return false, nil
 		}

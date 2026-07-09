@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
 	wgutil "github.com/mhsanaei/3x-ui/v3/internal/util/wireguard"
 )
@@ -612,7 +613,8 @@ func collectPeers(parsed *inboundSettings) ([]peer, error) {
 			}
 		}
 		if publicKey == "" {
-			return nil, common.NewError("amneziawg client requires publicKey:", c.Email)
+			logger.Warning("skip amneziawg client without publicKey:", c.Email)
+			continue
 		}
 		allowed := normalizeAllowedIPs(c.AllowedIPs)
 		if len(allowed) == 0 {

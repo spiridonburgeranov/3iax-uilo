@@ -192,34 +192,55 @@ func (s *ClientService) HasPendingNode(inboundSvc *InboundService, email string)
 }
 
 // findInboundIdsByClientEmail returns every inbound whose settings.clients[]
-// JSON contains an entry with the given email. Driver-portable (no JSON
-// operators) by parsing in Go — fine for the rare fallback path.
+// or legacy settings.peers[] JSON contains an entry with the given email.
+// Driver-portable (no JSON operators) by parsing in Go — fine for the rare fallback path.
 func (s *ClientService) findInboundIdsByClientEmail(email string) ([]int, error) {
 	var inbounds []model.Inbound
 	if err := database.GetDB().
-		Select("id, settings").
+		Select("id, settings, protocol").
 		Where("settings LIKE ?", "%"+email+"%").
 		Find(&inbounds).Error; err != nil {
 		return nil, err
 	}
+	seen := map[int]struct{}{}
 	out := make([]int, 0, len(inbounds))
+	add := func(id int) {
+		if _, ok := seen[id]; ok {
+			return
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
 	for _, ib := range inbounds {
 		var settings map[string]any
 		if err := json.Unmarshal([]byte(ib.Settings), &settings); err != nil {
 			continue
 		}
-		clients, ok := settings["clients"].([]any)
-		if !ok {
+		if clients, ok := settings["clients"].([]any); ok {
+			for _, c := range clients {
+				cm, ok := c.(map[string]any)
+				if !ok {
+					continue
+				}
+				if cEmail, _ := cm["email"].(string); cEmail == email {
+					add(ib.Id)
+					break
+				}
+			}
+		}
+		if _, hit := seen[ib.Id]; hit {
 			continue
 		}
-		for _, c := range clients {
-			cm, ok := c.(map[string]any)
-			if !ok {
-				continue
-			}
-			if cEmail, _ := cm["email"].(string); cEmail == email {
-				out = append(out, ib.Id)
-				break
+		if peers, ok := settings["peers"].([]any); ok {
+			for _, raw := range peers {
+				peer, ok := raw.(map[string]any)
+				if !ok {
+					continue
+				}
+				if peerEmail, _ := peer["email"].(string); peerEmail == email {
+					add(ib.Id)
+					break
+				}
 			}
 		}
 	}

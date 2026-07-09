@@ -121,6 +121,9 @@ func initModels() error {
 	if err := dedupeInboundSettingsClients(); err != nil {
 		return err
 	}
+	if err := cleanupLegacyAwgStorage(); err != nil {
+		return err
+	}
 	if err := migrateLegacySocksInboundsToMixed(); err != nil {
 		return err
 	}
@@ -226,7 +229,7 @@ func seedHostsFromExternalProxy() error {
 				return err
 			}
 		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "HostsFromExternalProxy"}).Error
+		return recordSeederRan(tx, "HostsFromExternalProxy")
 	})
 }
 
@@ -347,7 +350,7 @@ func seedWireguardPeersToClients() error {
 				return err
 			}
 		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "WireguardPeersToClients"}).Error
+		return recordSeederRan(tx, "WireguardPeersToClients")
 	})
 }
 
@@ -461,7 +464,7 @@ func seedAmneziawgPeersToClients() error {
 				return err
 			}
 		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "AmneziawgPeersToClients"}).Error
+		return recordSeederRan(tx, "AmneziawgPeersToClients")
 	})
 }
 
@@ -473,22 +476,53 @@ func purgeLegacyAwgClients() error {
 	if slices.Contains(history, "PurgeLegacyAwgClients") {
 		return nil
 	}
+	if err := cleanupLegacyAwgStorage(); err != nil {
+		return err
+	}
+	return recordSeederRan(db, "PurgeLegacyAwgClients")
+}
 
-	return db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("(public_key = '' OR public_key IS NULL) AND (private_key = '' OR private_key IS NULL)").
-			Delete(&model.AwgClient{}).Error; err != nil {
-			return err
-		}
-		clientEmails := tx.Table("clients").Select("email")
-		if err := tx.Where("email NOT IN (?) AND email <> ''", clientEmails).
-			Delete(&model.AwgClient{}).Error; err != nil {
-			return err
-		}
-		if err := pruneKeylessTunnelInboundPeers(tx); err != nil {
-			return err
-		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "PurgeLegacyAwgClients"}).Error
-	})
+func isDuplicateDBKeyErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "duplicate key") ||
+		strings.Contains(msg, "unique constraint") ||
+		strings.Contains(msg, "23505")
+}
+
+func recordSeederRan(tx *gorm.DB, name string) error {
+	if strings.TrimSpace(name) == "" {
+		return nil
+	}
+	if tx == nil {
+		tx = db
+	}
+	var count int64
+	if err := tx.Model(&model.HistoryOfSeeders{}).Where("seeder_name = ?", name).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	err := tx.Omit("id").Create(&model.HistoryOfSeeders{SeederName: name}).Error
+	if isDuplicateDBKeyErr(err) {
+		return nil
+	}
+	return err
+}
+
+func cleanupLegacyAwgStorage() error {
+	if err := db.Where("(public_key = '' OR public_key IS NULL) AND (private_key = '' OR private_key IS NULL)").
+		Delete(&model.AwgClient{}).Error; err != nil {
+		return err
+	}
+	if err := db.Where(`email <> '' AND NOT EXISTS (SELECT 1 FROM clients c WHERE c.email = awg_clients.email)`).
+		Delete(&model.AwgClient{}).Error; err != nil {
+		return err
+	}
+	return pruneKeylessTunnelInboundPeers(db)
 }
 
 func tunnelPeerHasKeys(peer map[string]any) bool {
@@ -704,7 +738,7 @@ func seedMtprotoSecretsToClients() error {
 				return err
 			}
 		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "MtprotoSecretsToClients"}).Error
+		return recordSeederRan(tx, "MtprotoSecretsToClients")
 	})
 }
 
@@ -740,7 +774,7 @@ func stripMtprotoInboundSecrets() error {
 				return err
 			}
 		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "StripMtprotoInboundSecrets"}).Error
+		return recordSeederRan(tx, "StripMtprotoInboundSecrets")
 	})
 }
 
@@ -1080,7 +1114,7 @@ func runSeeders(isUsersEmpty bool) error {
 	if empty && isUsersEmpty {
 		seeders := []string{"UserPasswordHash", "ClientsTable", "InboundClientsArrayFix", "InboundClientTgIdFix", "InboundClientSubIdFix", "FreedomFinalRulesReverseFix", "ApiTokensHash", "LegacyProxySettingsCleanup", "WireguardPeersToClients", "MtprotoSecretsToClients"}
 		for _, name := range seeders {
-			if err := db.Create(&model.HistoryOfSeeders{SeederName: name}).Error; err != nil {
+			if err := recordSeederRan(db, name); err != nil {
 				return err
 			}
 		}
@@ -1115,10 +1149,7 @@ func runSeeders(isUsersEmpty bool) error {
 			}
 		}
 
-		hashSeeder := &model.HistoryOfSeeders{
-			SeederName: "UserPasswordHash",
-		}
-		if err := db.Create(hashSeeder).Error; err != nil {
+		if err := recordSeederRan(db, "UserPasswordHash"); err != nil {
 			return err
 		}
 	}
@@ -1228,7 +1259,7 @@ func resetIpLimitsWithoutFail2ban() error {
 	}
 
 	if fail2banCanEnforce() {
-		return db.Create(&model.HistoryOfSeeders{SeederName: "ResetIpLimitNoFail2ban"}).Error
+		return recordSeederRan(db, "ResetIpLimitNoFail2ban")
 	}
 
 	var inbounds []model.Inbound
@@ -1285,7 +1316,7 @@ func resetIpLimitsWithoutFail2ban() error {
 			Update("limit_ip", 0).Error; err != nil {
 			return err
 		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "ResetIpLimitNoFail2ban"}).Error
+		return recordSeederRan(tx, "ResetIpLimitNoFail2ban")
 	})
 }
 
@@ -1311,7 +1342,7 @@ func clearLegacyProxySettings() error {
 			Delete(&model.Setting{}).Error; err != nil {
 			return err
 		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "LegacyProxySettingsCleanup"}).Error
+		return recordSeederRan(tx, "LegacyProxySettingsCleanup")
 	})
 }
 
@@ -1398,7 +1429,7 @@ func normalizeInboundClientTgId() error {
 				return err
 			}
 		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "InboundClientTgIdFix"}).Error
+		return recordSeederRan(tx, "InboundClientTgIdFix")
 	})
 }
 
@@ -1450,7 +1481,7 @@ func normalizeInboundClientSubId() error {
 				return err
 			}
 		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "InboundClientSubIdFix"}).Error
+		return recordSeederRan(tx, "InboundClientSubIdFix")
 	})
 }
 
@@ -1485,7 +1516,7 @@ func normalizeInboundClientsArray() error {
 				return err
 			}
 		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "InboundClientsArrayFix"}).Error
+		return recordSeederRan(tx, "InboundClientsArrayFix")
 	})
 }
 
@@ -1493,7 +1524,7 @@ func normalizeFreedomFinalRules() error {
 	var setting model.Setting
 	err := db.Model(model.Setting{}).Where("key = ?", "xrayTemplateConfig").First(&setting).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return db.Create(&model.HistoryOfSeeders{SeederName: "FreedomFinalRulesReverseFix"}).Error
+		return recordSeederRan(db, "FreedomFinalRulesReverseFix")
 	}
 	if err != nil {
 		return err
@@ -1502,7 +1533,7 @@ func normalizeFreedomFinalRules() error {
 	updated, changed, rErr := rewriteFreedomFinalRules(setting.Value)
 	if rErr != nil {
 		log.Printf("FreedomFinalRulesReverseFix: skip (invalid xrayTemplateConfig json): %v", rErr)
-		return db.Create(&model.HistoryOfSeeders{SeederName: "FreedomFinalRulesReverseFix"}).Error
+		return recordSeederRan(db, "FreedomFinalRulesReverseFix")
 	}
 
 	return db.Transaction(func(tx *gorm.DB) error {
@@ -1512,7 +1543,7 @@ func normalizeFreedomFinalRules() error {
 				return err
 			}
 		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "FreedomFinalRulesReverseFix"}).Error
+		return recordSeederRan(tx, "FreedomFinalRulesReverseFix")
 	})
 }
 
@@ -1697,7 +1728,7 @@ func seedClientsFromInboundJSON() error {
 			}
 		}
 
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "ClientsTable"}).Error
+		return recordSeederRan(tx, "ClientsTable")
 	})
 }
 
@@ -1725,7 +1756,7 @@ func seedApiTokens() error {
 			}
 		}
 	}
-	return db.Create(&model.HistoryOfSeeders{SeederName: "ApiTokensTable"}).Error
+	return recordSeederRan(db, "ApiTokensTable")
 }
 
 // hashExistingApiTokens replaces any plaintext token stored before tokens were
@@ -1747,7 +1778,7 @@ func hashExistingApiTokens() error {
 			return err
 		}
 	}
-	return db.Create(&model.HistoryOfSeeders{SeederName: "ApiTokensHash"}).Error
+	return recordSeederRan(db, "ApiTokensHash")
 }
 
 // isTableEmpty returns true if the named table contains zero rows.

@@ -306,6 +306,33 @@ func removeTunnelPeerEntries(settings map[string]any, email, publicKey string) b
 	return true
 }
 
+func settingsClientHasKeys(client map[string]any) bool {
+	for _, key := range []string{"publicKey", "public_key", "privateKey", "private_key", "password"} {
+		if v, ok := client[key].(string); ok && strings.TrimSpace(v) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func pruneKeylessSettingsClients(clients []any) []any {
+	if len(clients) == 0 {
+		return clients
+	}
+	kept := make([]any, 0, len(clients))
+	for _, raw := range clients {
+		client, ok := raw.(map[string]any)
+		if !ok {
+			kept = append(kept, raw)
+			continue
+		}
+		if settingsClientHasKeys(client) {
+			kept = append(kept, raw)
+		}
+	}
+	return kept
+}
+
 func tunnelClientPublicKey(client *model.ClientRecord) string {
 	if client == nil {
 		return ""
