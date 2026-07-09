@@ -351,6 +351,235 @@ func seedWireguardPeersToClients() error {
 	})
 }
 
+func seedAmneziawgPeersToClients() error {
+	var history []string
+	if err := db.Model(&model.HistoryOfSeeders{}).Pluck("seeder_name", &history).Error; err != nil {
+		return err
+	}
+	if slices.Contains(history, "AmneziawgPeersToClients") {
+		return nil
+	}
+
+	var inbounds []model.Inbound
+	if err := db.Where("protocol = ?", string(model.AmneziaWG)).Find(&inbounds).Error; err != nil {
+		return err
+	}
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		usedEmails := map[string]struct{}{}
+		var existingEmails []string
+		if err := tx.Model(&model.ClientRecord{}).Pluck("email", &existingEmails).Error; err != nil {
+			return err
+		}
+		for _, e := range existingEmails {
+			usedEmails[e] = struct{}{}
+		}
+
+		for _, inbound := range inbounds {
+			if strings.TrimSpace(inbound.Settings) == "" {
+				continue
+			}
+			var settings map[string]any
+			if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
+				log.Printf("AmneziawgPeersToClients: skip inbound %d (invalid settings json): %v", inbound.Id, err)
+				continue
+			}
+			peers, ok := settings["peers"].([]any)
+			if !ok || len(peers) == 0 {
+				continue
+			}
+
+			var linkCount int64
+			if err := tx.Model(&model.ClientInbound{}).Where("inbound_id = ?", inbound.Id).Count(&linkCount).Error; err != nil {
+				return err
+			}
+			if linkCount > 0 {
+				continue
+			}
+
+			clientObjs := make([]any, 0, len(peers))
+			for i, raw := range peers {
+				obj, ok := raw.(map[string]any)
+				if !ok {
+					continue
+				}
+				email := wireguardPeerEmail(inbound.Remark, obj, i, usedEmails)
+				usedEmails[email] = struct{}{}
+				obj["email"] = email
+				if sub, _ := obj["subId"].(string); strings.TrimSpace(sub) == "" {
+					obj["subId"] = random.NumLower(16)
+				}
+				if _, ok := obj["enable"]; !ok {
+					obj["enable"] = true
+				}
+
+				blob, err := json.Marshal(obj)
+				if err != nil {
+					continue
+				}
+				var c model.Client
+				if err := json.Unmarshal(blob, &c); err != nil {
+					log.Printf("AmneziawgPeersToClients: skip peer in inbound %d: %v", inbound.Id, err)
+					continue
+				}
+				c.Email = email
+
+				incoming := c.ToRecord()
+				var row model.ClientRecord
+				err = tx.Where("email = ?", email).First(&row).Error
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					if err := tx.Create(incoming).Error; err != nil {
+						return err
+					}
+					row = *incoming
+				} else if err != nil {
+					return err
+				} else {
+					model.MergeClientRecord(&row, incoming)
+					if err := tx.Save(&row).Error; err != nil {
+						return err
+					}
+				}
+
+				link := model.ClientInbound{ClientId: row.Id, InboundId: inbound.Id}
+				if err := tx.Where("client_id = ? AND inbound_id = ?", row.Id, inbound.Id).
+					FirstOrCreate(&link).Error; err != nil {
+					return err
+				}
+
+				clientObjs = append(clientObjs, obj)
+			}
+
+			delete(settings, "peers")
+			settings["clients"] = clientObjs
+			newSettings, err := json.Marshal(settings)
+			if err != nil {
+				return err
+			}
+			if err := tx.Model(&model.Inbound{}).Where("id = ?", inbound.Id).
+				Update("settings", string(newSettings)).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Create(&model.HistoryOfSeeders{SeederName: "AmneziawgPeersToClients"}).Error
+	})
+}
+
+func purgeLegacyAwgClients() error {
+	var history []string
+	if err := db.Model(&model.HistoryOfSeeders{}).Pluck("seeder_name", &history).Error; err != nil {
+		return err
+	}
+	if slices.Contains(history, "PurgeLegacyAwgClients") {
+		return nil
+	}
+
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("(public_key = '' OR public_key IS NULL) AND (private_key = '' OR private_key IS NULL)").
+			Delete(&model.AwgClient{}).Error; err != nil {
+			return err
+		}
+		clientEmails := tx.Table("clients").Select("email")
+		if err := tx.Where("email NOT IN (?) AND email <> ''", clientEmails).
+			Delete(&model.AwgClient{}).Error; err != nil {
+			return err
+		}
+		if err := pruneKeylessTunnelInboundPeers(tx); err != nil {
+			return err
+		}
+		return tx.Create(&model.HistoryOfSeeders{SeederName: "PurgeLegacyAwgClients"}).Error
+	})
+}
+
+func tunnelPeerHasKeys(peer map[string]any) bool {
+	for _, key := range []string{"publicKey", "public_key", "privateKey", "private_key"} {
+		if v, ok := peer[key].(string); ok && strings.TrimSpace(v) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func pruneKeylessTunnelInboundPeers(tx *gorm.DB) error {
+	var inbounds []model.Inbound
+	protocols := []string{string(model.WireGuard), string(model.AmneziaWG)}
+	if err := tx.Where("protocol IN ?", protocols).Find(&inbounds).Error; err != nil {
+		return err
+	}
+	for _, inbound := range inbounds {
+		if strings.TrimSpace(inbound.Settings) == "" {
+			continue
+		}
+		var settings map[string]any
+		if err := json.Unmarshal([]byte(inbound.Settings), &settings); err != nil {
+			continue
+		}
+		changed := false
+		if peers, ok := settings["peers"].([]any); ok && len(peers) > 0 {
+			kept := make([]any, 0, len(peers))
+			for _, raw := range peers {
+				peer, ok := raw.(map[string]any)
+				if !ok || tunnelPeerHasKeys(peer) {
+					kept = append(kept, raw)
+					continue
+				}
+				changed = true
+			}
+			if changed {
+				if len(kept) == 0 {
+					delete(settings, "peers")
+				} else {
+					settings["peers"] = kept
+				}
+			}
+		}
+		if clients, ok := settings["clients"].([]any); ok && len(clients) > 0 {
+			kept := make([]any, 0, len(clients))
+			for _, raw := range clients {
+				client, ok := raw.(map[string]any)
+				if !ok {
+					kept = append(kept, raw)
+					continue
+				}
+				if tunnelPeerHasKeys(client) {
+					kept = append(kept, raw)
+					continue
+				}
+				email, _ := client["email"].(string)
+				email = strings.TrimSpace(email)
+				if email == "" {
+					changed = true
+					continue
+				}
+				var count int64
+				if err := tx.Model(&model.ClientRecord{}).Where("email = ?", email).Count(&count).Error; err != nil {
+					return err
+				}
+				if count == 0 {
+					changed = true
+					continue
+				}
+				kept = append(kept, raw)
+			}
+			if changed {
+				settings["clients"] = kept
+			}
+		}
+		if !changed {
+			continue
+		}
+		newSettings, err := json.Marshal(settings)
+		if err != nil {
+			return err
+		}
+		if err := tx.Model(&model.Inbound{}).Where("id = ?", inbound.Id).
+			Update("settings", string(newSettings)).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // wireguardPeerEmail derives a stable, unique client email for a migrated peer
 // from the inbound remark plus the peer's comment (or its 1-based index).
 func wireguardPeerEmail(remark string, peer map[string]any, index int, used map[string]struct{}) string {
@@ -955,6 +1184,14 @@ func runSeeders(isUsersEmpty bool) error {
 
 	// Self-gated on the "WireguardPeersToClients" row.
 	if err := seedWireguardPeersToClients(); err != nil {
+		return err
+	}
+
+	if err := seedAmneziawgPeersToClients(); err != nil {
+		return err
+	}
+
+	if err := purgeLegacyAwgClients(); err != nil {
 		return err
 	}
 

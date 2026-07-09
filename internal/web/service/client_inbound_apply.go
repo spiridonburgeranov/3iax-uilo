@@ -75,7 +75,7 @@ func (s *ClientService) delInboundClients(inboundSvc *InboundService, inboundId 
 
 	interfaceClients, ok := settings["clients"].([]any)
 	if !ok {
-		return false, common.NewError("invalid clients format in inbound settings")
+		interfaceClients = []any{}
 	}
 
 	type removedClient struct {
@@ -100,7 +100,32 @@ func (s *ClientService) delInboundClients(inboundSvc *InboundService, inboundId 
 	}
 
 	if len(removed) == 0 {
+		for _, rec := range recs {
+			if rec == nil || rec.Email == "" {
+				continue
+			}
+			if _, hit := wanted[rec.Email]; !hit {
+				continue
+			}
+			if removeTunnelPeerEntries(settings, rec.Email, tunnelClientPublicKey(rec)) {
+				removed = append(removed, removedClient{email: rec.Email, needApiDel: true})
+			}
+		}
+	}
+
+	if len(removed) == 0 {
 		return false, nil
+	}
+
+	for _, r := range removed {
+		publicKey := ""
+		for _, rec := range recs {
+			if rec != nil && rec.Email == r.email {
+				publicKey = tunnelClientPublicKey(rec)
+				break
+			}
+		}
+		removeTunnelPeerEntries(settings, r.email, publicKey)
 	}
 
 	db := database.GetDB()
@@ -235,6 +260,16 @@ func (s *ClientService) delInboundClients(inboundSvc *InboundService, inboundId 
 	}
 	if nodePush && !nodePushFailed {
 		advancePushedInbound(nodeRt, prevSettings, oldInbound)
+	}
+
+	legacyEmails := make([]string, 0, len(removed))
+	for _, r := range removed {
+		if r.email != "" {
+			legacyEmails = append(legacyEmails, r.email)
+		}
+	}
+	if _, err := DeleteLegacyAwgClientsByEmails(nil, legacyEmails...); err != nil {
+		return needRestart, err
 	}
 
 	return needRestart, nil
@@ -935,7 +970,7 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 
 	interfaceClients, ok := settings["clients"].([]any)
 	if !ok {
-		return false, common.NewError("invalid clients format in inbound settings")
+		interfaceClients = []any{}
 	}
 
 	var newClients []any
@@ -956,9 +991,33 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 	}
 
 	if !found {
+		rec, recErr := s.GetRecordByEmail(nil, email)
+		publicKey := ""
+		if recErr == nil {
+			publicKey = tunnelClientPublicKey(rec)
+		}
+		if removeTunnelPeerEntries(settings, email, publicKey) {
+			found = true
+			needApiDel = true
+		}
+	}
+
+	if !found {
+		deleted, legacyErr := DeleteLegacyAwgClientsByEmails(nil, email)
+		if legacyErr != nil {
+			return false, legacyErr
+		}
+		if deleted > 0 {
+			return false, nil
+		}
 		return false, fmt.Errorf("%w for email: %s", ErrClientNotInInbound, email)
 	}
 	db := database.GetDB()
+	if rec, recErr := s.GetRecordByEmail(nil, email); recErr == nil {
+		removeTunnelPeerEntries(settings, email, tunnelClientPublicKey(rec))
+	} else {
+		removeTunnelPeerEntries(settings, email, "")
+	}
 	newClients = compactOrphans(db, newClients)
 	if newClients == nil {
 		newClients = []any{}
@@ -1092,6 +1151,10 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 				}
 			}
 		}
+	}
+
+	if _, err := DeleteLegacyAwgClientsByEmails(nil, email); err != nil {
+		return needRestart, err
 	}
 
 	return needRestart, nil

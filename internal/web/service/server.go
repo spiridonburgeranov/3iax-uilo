@@ -639,6 +639,9 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 		var awgClients []model.AwgClient
 		if err := database.GetDB().Find(&awgClients).Error; err == nil {
 			for _, client := range awgClients {
+				if strings.TrimSpace(client.PublicKey) == "" {
+					continue
+				}
 				if idx, ok := peerByKey[client.PublicKey]; ok {
 					status.Awg.Peers[idx].Email = client.Email
 				} else {

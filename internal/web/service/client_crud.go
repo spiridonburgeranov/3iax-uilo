@@ -513,6 +513,11 @@ func (s *ClientService) Delete(inboundSvc *InboundService, id int, keepTraffic b
 		if err := tx.Where("client_id = ?", id).Delete(&model.ClientExternalLink{}).Error; err != nil {
 			return err
 		}
+		if existing.Email != "" {
+			if _, err := DeleteLegacyAwgClientsByEmails(tx, existing.Email); err != nil {
+				return err
+			}
+		}
 		if !keepTraffic && existing.Email != "" {
 			if err := tx.Where("email = ?", existing.Email).Delete(&xray.ClientTraffic{}).Error; err != nil {
 				return err
@@ -643,6 +648,28 @@ func (s *ClientService) DeleteByEmail(inboundSvc *InboundService, email string, 
 		return false, idsErr
 	}
 	if len(inboundIds) == 0 {
+		deleted, legacyErr := DeleteLegacyAwgClientsByEmails(nil, email)
+		if legacyErr != nil {
+			return false, legacyErr
+		}
+		if deleted > 0 {
+			if !keepTraffic {
+				db := database.GetDB()
+				if err := db.Where("email = ?", email).Delete(&xray.ClientTraffic{}).Error; err != nil {
+					return false, err
+				}
+				if err := clearGlobalTraffic(db, email); err != nil {
+					return false, err
+				}
+				if err := db.Where("client_email = ?", email).Delete(&model.InboundClientIps{}).Error; err != nil {
+					return false, err
+				}
+				if err := db.Where("email = ?", email).Delete(&model.NodeClientTraffic{}).Error; err != nil {
+					return false, err
+				}
+			}
+			return false, nil
+		}
 		return false, common.NewError(fmt.Sprintf("client %q not found in any inbound or client record", email))
 	}
 	needRestart := false

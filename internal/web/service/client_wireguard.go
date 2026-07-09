@@ -252,3 +252,63 @@ func defaultWireguardClientsWithBase(existing, clients []model.Client, interface
 	}
 	return nil
 }
+
+func tunnelPeerPublicKey(peer map[string]any) string {
+	for _, key := range []string{"publicKey", "public_key", "pubKey"} {
+		if v, ok := peer[key].(string); ok {
+			if trimmed := strings.TrimSpace(v); trimmed != "" {
+				return trimmed
+			}
+		}
+	}
+	return ""
+}
+
+func tunnelPeerMatchesDelete(peer map[string]any, email, publicKey string) bool {
+	if email != "" {
+		if e, ok := peer["email"].(string); ok && strings.TrimSpace(e) == email {
+			return true
+		}
+	}
+	if publicKey != "" && tunnelPeerPublicKey(peer) == publicKey {
+		return true
+	}
+	return false
+}
+
+func removeTunnelPeerEntries(settings map[string]any, email, publicKey string) bool {
+	peers, ok := settings["peers"].([]any)
+	if !ok || len(peers) == 0 {
+		return false
+	}
+	kept := make([]any, 0, len(peers))
+	removed := false
+	for _, raw := range peers {
+		peer, ok := raw.(map[string]any)
+		if !ok {
+			kept = append(kept, raw)
+			continue
+		}
+		if tunnelPeerMatchesDelete(peer, email, publicKey) {
+			removed = true
+			continue
+		}
+		kept = append(kept, raw)
+	}
+	if !removed {
+		return false
+	}
+	if len(kept) == 0 {
+		delete(settings, "peers")
+	} else {
+		settings["peers"] = kept
+	}
+	return true
+}
+
+func tunnelClientPublicKey(client *model.ClientRecord) string {
+	if client == nil {
+		return ""
+	}
+	return strings.TrimSpace(client.PublicKey)
+}

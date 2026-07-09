@@ -216,6 +216,11 @@ func (s *ClientService) DeleteOrphans() (int, error) {
 				return e
 			}
 		}
+		if len(emails) > 0 {
+			if _, e := DeleteLegacyAwgClientsByEmails(tx, emails...); e != nil {
+				return e
+			}
+		}
 		return nil
 	}); err != nil {
 		return 0, err
